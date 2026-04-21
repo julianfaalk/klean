@@ -1,0 +1,427 @@
+import AppKit
+import Foundation
+
+enum SidebarSelection: Hashable {
+    case overview
+    case category(String)
+}
+
+enum ConfirmedAction {
+    case cleanup(CleanupRecommendation)
+    case trash(StorageNode)
+}
+
+struct AppAlert: Identifiable {
+    enum Kind {
+        case info(title: String, message: String)
+        case confirmation(title: String, message: String, action: ConfirmedAction)
+    }
+
+    let id = UUID()
+    let kind: Kind
+}
+
+@MainActor
+final class StorageDashboardViewModel: ObservableObject {
+    @Published var snapshot: StorageSnapshot?
+    @Published var scanState: ScanState = .idle
+    @Published var selection: SidebarSelection = .overview
+    @Published var activeAlert: AppAlert?
+    @Published var isShowingCachedData = false
+
+    private let scanner = StorageScanner()
+    private let cleanupManager = CleanupManager()
+    private let snapshotStore = SnapshotStore()
+    private let automaticRefreshInterval: TimeInterval = 15 * 60
+    private var scanTask: Task<Void, Never>?
+
+    init() {
+        restoreCachedSnapshot()
+        if shouldRefreshOnLaunch {
+            startScan(force: true)
+        }
+    }
+
+    var selectedCategory: StorageCategory? {
+        guard case let .category(id) = selection else {
+            return nil
+        }
+
+        return snapshot?.categories.first(where: { $0.id == id })
+    }
+
+    func startScan(force: Bool = true) {
+        if force == false,
+           let snapshot,
+           Date().timeIntervalSince(snapshot.scannedAt) < automaticRefreshInterval {
+            scanState = .ready(snapshot.scannedAt)
+            return
+        }
+
+        scanTask?.cancel()
+        scanState = .scanning(.init(currentTargetTitle: "Vorbereitung", completedTargets: 0, totalTargets: 1))
+
+        scanTask = Task { [weak self] in
+            guard let self else { return }
+
+            do {
+                let snapshot = try await scanner.scan { progress in
+                    self.scanState = .scanning(progress)
+                } partialUpdate: { update in
+                    let mergedSnapshot = self.mergeDisplayedSnapshot(with: update.snapshot)
+                    self.snapshot = mergedSnapshot
+                    self.isShowingCachedData = false
+                    self.scanState = .scanning(update.progress)
+                    self.persist(snapshot: mergedSnapshot)
+                }
+
+                self.snapshot = snapshot
+                self.isShowingCachedData = false
+                self.persist(snapshot: snapshot)
+                if case let .category(id) = self.selection,
+                   snapshot.categories.contains(where: { $0.id == id }) == false {
+                    self.selection = .overview
+                }
+                self.scanState = .ready(snapshot.scannedAt)
+            } catch is CancellationError {
+                self.scanState = .idle
+            } catch {
+                self.scanState = .failed(error.localizedDescription)
+                self.activeAlert = AppAlert(
+                    kind: .info(
+                        title: "Scan fehlgeschlagen",
+                        message: error.localizedDescription
+                    )
+                )
+            }
+        }
+    }
+
+    func cancelScan() {
+        scanTask?.cancel()
+        scanTask = nil
+        scanState = .idle
+    }
+
+    func select(category: StorageCategory) {
+        selection = .category(category.id)
+    }
+
+    func reveal(_ url: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    func open(_ url: URL) {
+        NSWorkspace.shared.open(url)
+    }
+
+    func openFullDiskAccessSettings() {
+        guard let settingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") else {
+            return
+        }
+        NSWorkspace.shared.open(settingsURL)
+    }
+
+    func requestCleanup(_ recommendation: CleanupRecommendation) {
+        activeAlert = AppAlert(
+            kind: .confirmation(
+                title: recommendation.title,
+                message: "\(recommendation.summary)\n\nGeschaetzter Effekt: \(ByteCountFormatter.storageString(recommendation.estimatedBytes))\nRisiko: \(recommendation.risk.note)",
+                action: .cleanup(recommendation)
+            )
+        )
+    }
+
+    func requestTrash(_ item: StorageNode) {
+        activeAlert = AppAlert(
+            kind: .confirmation(
+                title: "In den Papierkorb verschieben?",
+                message: "\(item.name) wird in deinen Papierkorb verschoben.",
+                action: .trash(item)
+            )
+        )
+    }
+
+    func perform(_ action: ConfirmedAction) {
+        Task { [weak self] in
+            guard let self else { return }
+
+            do {
+                switch action {
+                case let .cleanup(recommendation):
+                    try cleanupManager.execute(recommendation)
+                    applyOptimisticUpdate(for: action)
+                    persistCurrentSnapshot()
+                    activeAlert = AppAlert(
+                        kind: .info(
+                            title: "Bereinigung abgeschlossen",
+                            message: "\(recommendation.title) wurde ausgefuehrt."
+                        )
+                    )
+                case let .trash(item):
+                    try cleanupManager.moveItemToTrash(item.url)
+                    applyOptimisticUpdate(for: action)
+                    persistCurrentSnapshot()
+                    activeAlert = AppAlert(
+                        kind: .info(
+                            title: "Verschoben",
+                            message: "\(item.name) liegt jetzt im Papierkorb."
+                        )
+                    )
+                }
+
+                startScan(force: true)
+            } catch {
+                startScan(force: true)
+                activeAlert = AppAlert(
+                    kind: .info(
+                        title: "Aktion nicht abgeschlossen",
+                        message: error.localizedDescription
+                    )
+                )
+            }
+        }
+    }
+}
+
+private extension StorageDashboardViewModel {
+    var shouldRefreshOnLaunch: Bool {
+        guard let snapshot else {
+            return true
+        }
+
+        return Date().timeIntervalSince(snapshot.scannedAt) >= automaticRefreshInterval
+    }
+
+    func restoreCachedSnapshot() {
+        guard let cachedSnapshot = try? snapshotStore.load() else {
+            return
+        }
+
+        snapshot = cachedSnapshot
+        isShowingCachedData = true
+        scanState = .ready(cachedSnapshot.scannedAt)
+    }
+
+    func mergeDisplayedSnapshot(with refreshedSnapshot: StorageSnapshot) -> StorageSnapshot {
+        guard let snapshot else {
+            return refreshedSnapshot
+        }
+
+        return snapshot.merging(refreshedSnapshot: refreshedSnapshot)
+    }
+
+    func persist(snapshot: StorageSnapshot) {
+        try? snapshotStore.save(snapshot)
+    }
+
+    func persistCurrentSnapshot() {
+        guard let snapshot else { return }
+        persist(snapshot: snapshot)
+    }
+
+    func applyOptimisticUpdate(for action: ConfirmedAction) {
+        guard let snapshot else { return }
+
+        switch action {
+        case let .cleanup(recommendation):
+            self.snapshot = snapshot.applyingCleanup(recommendation)
+        case let .trash(item):
+            self.snapshot = snapshot.applyingTrash(of: item)
+        }
+        isShowingCachedData = false
+    }
+}
+
+private extension StorageSnapshot {
+    func merging(refreshedSnapshot: StorageSnapshot) -> StorageSnapshot {
+        let refreshedCategoryPaths = Set(refreshedSnapshot.categories.map(\.id))
+        let refreshedPrefixes = refreshedSnapshot.categories.map { $0.url.standardizedFileURL.path }
+
+        let preservedCategories = categories.filter { refreshedCategoryPaths.contains($0.id) == false }
+        let mergedCategories = (preservedCategories + refreshedSnapshot.categories)
+            .sorted { $0.totalBytes > $1.totalBytes }
+
+        let preservedLargestFiles = largestFiles.filter { file in
+            refreshedPrefixes.contains(where: { file.url.standardizedFileURL.path.hasPrefix($0) }) == false
+        }
+        let mergedLargestFiles = Array((preservedLargestFiles + refreshedSnapshot.largestFiles)
+            .sorted { $0.bytes > $1.bytes }
+            .prefix(18))
+
+        let mergedInaccessiblePaths = Array(
+            Set(inaccessiblePaths.map(\.path) + refreshedSnapshot.inaccessiblePaths.map(\.path))
+        )
+        .map { URL(fileURLWithPath: $0, isDirectory: true) }
+        .sorted { $0.path < $1.path }
+
+        return StorageSnapshot(
+            volume: refreshedSnapshot.volume,
+            scannedAt: refreshedSnapshot.scannedAt,
+            categories: mergedCategories,
+            largestFiles: mergedLargestFiles,
+            inaccessiblePaths: mergedInaccessiblePaths
+        )
+    }
+
+    func applyingCleanup(_ recommendation: CleanupRecommendation) -> StorageSnapshot {
+        let targetPath = recommendation.targetURL.standardizedFileURL.path
+        guard let targetIndex = categories.firstIndex(where: { $0.url.standardizedFileURL.path == targetPath }) else {
+            return self
+        }
+
+        var updatedCategories = categories
+        let targetCategory = categories[targetIndex]
+        let removedBytes = targetCategory.totalBytes
+        let removedItems = targetCategory.itemCount
+
+        updatedCategories[targetIndex] = targetCategory.cleared()
+
+        switch recommendation.strategy {
+        case .trashContents:
+            if let trashIndex = updatedCategories.firstIndex(where: \.isTrashCategory) {
+                updatedCategories[trashIndex] = updatedCategories[trashIndex]
+                    .adding(bytes: removedBytes, itemCount: removedItems)
+            }
+
+            return StorageSnapshot(
+                volume: volume,
+                scannedAt: Date(),
+                categories: updatedCategories,
+                largestFiles: largestFiles.filter { !$0.url.path.hasPrefix(targetPath) },
+                inaccessiblePaths: inaccessiblePaths
+            )
+
+        case .deleteContents:
+            return StorageSnapshot(
+                volume: volume.adjustingAvailableBytes(by: removedBytes),
+                scannedAt: Date(),
+                categories: updatedCategories,
+                largestFiles: largestFiles.filter { !$0.url.path.hasPrefix(targetPath) },
+                inaccessiblePaths: inaccessiblePaths
+            )
+
+        case .moveItemToTrash:
+            return self
+        }
+    }
+
+    func applyingTrash(of item: StorageNode) -> StorageSnapshot {
+        var updatedCategories = categories
+
+        if let sourceIndex = sourceCategoryIndex(for: item.url) {
+            updatedCategories[sourceIndex] = updatedCategories[sourceIndex]
+                .subtracting(node: item)
+        }
+
+        if let trashIndex = updatedCategories.firstIndex(where: \.isTrashCategory) {
+            updatedCategories[trashIndex] = updatedCategories[trashIndex]
+                .adding(bytes: item.bytes, itemCount: max(item.itemCount, 1))
+        }
+
+        return StorageSnapshot(
+            volume: volume,
+            scannedAt: Date(),
+            categories: updatedCategories,
+            largestFiles: largestFiles.filter { $0.id != item.id },
+            inaccessiblePaths: inaccessiblePaths
+        )
+    }
+
+    private func sourceCategoryIndex(for url: URL) -> Int? {
+        categories
+            .enumerated()
+            .filter { _, category in
+                category.isTrashCategory == false &&
+                url.standardizedFileURL.path.hasPrefix(category.url.standardizedFileURL.path)
+            }
+            .max { lhs, rhs in
+                lhs.element.url.standardizedFileURL.path.count < rhs.element.url.standardizedFileURL.path.count
+            }?
+            .offset
+    }
+}
+
+private extension StorageCategory {
+    var isTrashCategory: Bool {
+        url.lastPathComponent == ".Trash"
+    }
+
+    func cleared() -> StorageCategory {
+        StorageCategory(
+            title: title,
+            subtitle: subtitle,
+            systemImage: systemImage,
+            url: url,
+            totalBytes: 0,
+            itemCount: 0,
+            topChildren: [],
+            cleanupRecommendation: nil
+        )
+    }
+
+    func adding(bytes: Int64, itemCount: Int) -> StorageCategory {
+        let updatedBytes = max(totalBytes + bytes, 0)
+        let updatedCount = max(self.itemCount + itemCount, 0)
+
+        return StorageCategory(
+            title: title,
+            subtitle: subtitle,
+            systemImage: systemImage,
+            url: url,
+            totalBytes: updatedBytes,
+            itemCount: updatedCount,
+            topChildren: topChildren,
+            cleanupRecommendation: cleanupRecommendation?.withEstimatedBytes(updatedBytes)
+        )
+    }
+
+    func subtracting(node: StorageNode) -> StorageCategory {
+        let updatedBytes = max(totalBytes - node.bytes, 0)
+        let updatedCount = max(itemCount - max(node.itemCount, 1), 0)
+        let updatedChildren = topChildren.filter { $0.id != node.id }
+
+        return StorageCategory(
+            title: title,
+            subtitle: subtitle,
+            systemImage: systemImage,
+            url: url,
+            totalBytes: updatedBytes,
+            itemCount: updatedCount,
+            topChildren: updatedChildren,
+            cleanupRecommendation: cleanupRecommendation?.withEstimatedBytes(updatedBytes)
+        )
+    }
+}
+
+private extension CleanupRecommendation {
+    func withEstimatedBytes(_ updatedBytes: Int64) -> CleanupRecommendation? {
+        guard updatedBytes > 0 else {
+            return nil
+        }
+
+        return CleanupRecommendation(
+            title: title,
+            summary: summary,
+            buttonLabel: buttonLabel,
+            targetURL: targetURL,
+            strategy: strategy,
+            risk: risk,
+            estimatedBytes: updatedBytes
+        )
+    }
+}
+
+private extension VolumeStats {
+    func adjustingAvailableBytes(by delta: Int64) -> VolumeStats {
+        let updatedAvailableBytes = min(max(availableBytes + delta, 0), totalBytes)
+        let importantDelta = updatedAvailableBytes - availableBytes
+
+        return VolumeStats(
+            totalBytes: totalBytes,
+            availableBytes: updatedAvailableBytes,
+            importantAvailableBytes: min(max(importantAvailableBytes + importantDelta, 0), totalBytes),
+            opportunisticAvailableBytes: min(max(opportunisticAvailableBytes + importantDelta, 0), totalBytes)
+        )
+    }
+}
