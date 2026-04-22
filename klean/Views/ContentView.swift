@@ -27,12 +27,12 @@ struct ContentView: View {
         .navigationSplitViewStyle(.balanced)
         .toolbar {
             ToolbarItemGroup {
-                ToolbarActionButton(title: "Neu scannen", systemImage: "arrow.clockwise") {
+                ToolbarActionButton(title: "Neu scannen", systemImage: "arrow.clockwise.circle.fill") {
                     viewModel.startScan()
                 }
 
                 if case .scanning = viewModel.scanState {
-                    ToolbarActionButton(title: "Scan stoppen", systemImage: "stop.fill") {
+                    ToolbarActionButton(title: "Scan stoppen", systemImage: "stop.circle.fill") {
                         viewModel.cancelScan()
                     }
                 }
@@ -133,25 +133,12 @@ private struct SidebarHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.accentColor, KleanTheme.highlight],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 42, height: 42)
-                    .overlay {
-                        Image(systemName: "internaldrive.fill")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
+                SidebarAppMark()
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("klean")
                         .font(.system(size: 26, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white)
+                    .foregroundStyle(.white)
                     Text("Storage control center")
                         .font(.callout)
                         .foregroundStyle(.white.opacity(0.64))
@@ -170,7 +157,19 @@ private struct SidebarHeader: View {
                     )
                 }
             }
+
+            Text(snapshotStatus)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.54))
         }
+    }
+
+    private var snapshotStatus: String {
+        guard let snapshot else {
+            return "Noch kein Snapshot geladen."
+        }
+
+        return "Letzter Stand: \(snapshot.scannedAt.formatted(date: .abbreviated, time: .shortened))"
     }
 }
 
@@ -194,6 +193,43 @@ private struct SidebarInfoChip: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color.white.opacity(0.07))
         )
+    }
+}
+
+private struct SidebarAppMark: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.94),
+                            Color(red: 0.83, green: 0.88, blue: 0.82).opacity(0.84)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 46, height: 46)
+
+            Circle()
+                .trim(from: 0.10, to: 0.86)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.accentColor, KleanTheme.highlight],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    style: StrokeStyle(lineWidth: 4.5, lineCap: .round)
+                )
+                .frame(width: 24, height: 24)
+                .rotationEffect(.degrees(-110))
+
+            Circle()
+                .fill(Color.accentColor.opacity(0.90))
+                .frame(width: 9, height: 9)
+        }
+        .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
     }
 }
 
@@ -299,6 +335,19 @@ private struct ToolbarActionButton: View {
     var body: some View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(buttonTint)
+    }
+
+    private var buttonTint: Color {
+        switch systemImage {
+        case "stop.circle.fill":
+            return .red
+        case "lock.shield.fill":
+            return KleanTheme.highlight
+        default:
+            return .accentColor
         }
     }
 }

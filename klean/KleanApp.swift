@@ -7,7 +7,9 @@ struct KleanApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(viewModel: viewModel)
+                .frame(minWidth: 1120, minHeight: 720)
         }
+        .defaultSize(width: 1380, height: 860)
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified(showsTitle: false))
         .commands {

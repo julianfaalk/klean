@@ -1,18 +1,27 @@
 import SwiftUI
 
 enum KleanTheme {
-    static let canvasTop = Color(red: 0.95, green: 0.94, blue: 0.90)
-    static let canvasBottom = Color(red: 0.90, green: 0.93, blue: 0.89)
-    static let hazeGreen = Color(red: 0.63, green: 0.78, blue: 0.67)
-    static let hazeGold = Color(red: 0.90, green: 0.77, blue: 0.58)
-    static let ink = Color(red: 0.15, green: 0.18, blue: 0.17)
-    static let mutedInk = Color(red: 0.38, green: 0.41, blue: 0.38)
-    static let panelTop = Color.white.opacity(0.92)
-    static let panelBottom = Color.white.opacity(0.72)
-    static let panelStroke = Color.white.opacity(0.70)
-    static let sidebarTop = Color(red: 0.12, green: 0.15, blue: 0.15)
-    static let sidebarBottom = Color(red: 0.08, green: 0.10, blue: 0.11)
-    static let highlight = Color(red: 0.92, green: 0.62, blue: 0.27)
+    static let canvasTop = Color(red: 0.97, green: 0.96, blue: 0.93)
+    static let canvasBottom = Color(red: 0.87, green: 0.91, blue: 0.87)
+    static let canvasShadow = Color(red: 0.68, green: 0.75, blue: 0.69)
+    static let hazeGreen = Color(red: 0.57, green: 0.75, blue: 0.63)
+    static let hazeGold = Color(red: 0.93, green: 0.76, blue: 0.53)
+    static let hazeBlue = Color(red: 0.55, green: 0.67, blue: 0.82)
+    static let ink = Color(red: 0.14, green: 0.17, blue: 0.16)
+    static let mutedInk = Color(red: 0.36, green: 0.40, blue: 0.37)
+    static let quietInk = Color(red: 0.51, green: 0.55, blue: 0.51)
+    static let panelTop = Color.white.opacity(0.93)
+    static let panelBottom = Color(red: 0.94, green: 0.95, blue: 0.92).opacity(0.88)
+    static let panelStroke = Color.white.opacity(0.76)
+    static let panelShadow = Color.black.opacity(0.12)
+    static let sidebarTop = Color(red: 0.10, green: 0.13, blue: 0.12)
+    static let sidebarBottom = Color(red: 0.06, green: 0.08, blue: 0.09)
+    static let highlight = Color(red: 0.90, green: 0.61, blue: 0.26)
+    static let accent = Color(red: 0.22, green: 0.59, blue: 0.33)
+    static let success = Color(red: 0.18, green: 0.62, blue: 0.39)
+    static let warning = Color(red: 0.86, green: 0.55, blue: 0.14)
+    static let danger = Color(red: 0.82, green: 0.23, blue: 0.19)
+    static let info = Color(red: 0.28, green: 0.44, blue: 0.76)
 }
 
 struct DetailCanvasBackground: View {
@@ -25,22 +34,46 @@ struct DetailCanvasBackground: View {
             )
 
             Circle()
-                .fill(KleanTheme.hazeGreen.opacity(0.32))
-                .frame(width: 520, height: 520)
-                .blur(radius: 90)
-                .offset(x: -240, y: -220)
+                .fill(KleanTheme.hazeGreen.opacity(0.30))
+                .frame(width: 560, height: 560)
+                .blur(radius: 95)
+                .offset(x: -260, y: -200)
 
             Circle()
-                .fill(KleanTheme.hazeGold.opacity(0.28))
-                .frame(width: 480, height: 480)
-                .blur(radius: 100)
-                .offset(x: 260, y: -160)
+                .fill(KleanTheme.hazeGold.opacity(0.25))
+                .frame(width: 460, height: 460)
+                .blur(radius: 96)
+                .offset(x: 320, y: -180)
 
             Circle()
-                .fill(Color.white.opacity(0.35))
-                .frame(width: 600, height: 600)
-                .blur(radius: 120)
-                .offset(x: 180, y: 260)
+                .fill(KleanTheme.hazeBlue.opacity(0.18))
+                .frame(width: 620, height: 620)
+                .blur(radius: 118)
+                .offset(x: 210, y: 280)
+
+            RoundedRectangle(cornerRadius: 120, style: .continuous)
+                .stroke(Color.white.opacity(0.30), lineWidth: 1)
+                .padding(36)
+                .blur(radius: 0.4)
+
+            VStack(spacing: 22) {
+                HStack(spacing: 22) {
+                    RoundedRectangle(cornerRadius: 42, style: .continuous)
+                        .fill(Color.white.opacity(0.10))
+                        .frame(width: 180, height: 180)
+                        .blur(radius: 36)
+                    Spacer()
+                }
+                Spacer()
+                HStack {
+                    Spacer()
+                    RoundedRectangle(cornerRadius: 48, style: .continuous)
+                        .fill(Color.black.opacity(0.05))
+                        .frame(width: 260, height: 220)
+                        .blur(radius: 56)
+                }
+            }
+            .padding(60)
         }
     }
 }
@@ -49,37 +82,57 @@ struct OverviewDashboard: View {
     @ObservedObject var viewModel: StorageDashboardViewModel
 
     private let categoryColumns = [
-        GridItem(.adaptive(minimum: 220), spacing: 16)
+        GridItem(.adaptive(minimum: 240), spacing: 18)
     ]
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                header
+            VStack(alignment: .leading, spacing: 28) {
+                OverviewHeroCard(
+                    snapshot: viewModel.snapshot,
+                    scanState: viewModel.scanState,
+                    isShowingCachedData: viewModel.isShowingCachedData,
+                    openFullDiskAccessSettings: viewModel.openFullDiskAccessSettings
+                )
 
                 if let snapshot = viewModel.snapshot {
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                    OverviewInsightsRow(snapshot: snapshot)
+
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 18) {
                         StorageSummaryCard(snapshot: snapshot)
                         QuickActionsCard(viewModel: viewModel, recommendations: snapshot.cleanupRecommendations)
                     }
 
-                    VStack(alignment: .leading, spacing: 14) {
-                        SectionHeadline(title: "Groesste Bereiche", subtitle: "Die wichtigsten Speicherblöcke im gescannten Bereich.")
-                        LazyVGrid(columns: categoryColumns, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        SectionHeadline(
+                            eyebrow: "Bereiche",
+                            title: "Die grössten Speicherblöcke zuerst",
+                            subtitle: "Die wichtigsten Flächen im gescannten Bereich, mit Gewichtung nach belegtem Speicher."
+                        )
+
+                        LazyVGrid(columns: categoryColumns, spacing: 18) {
                             ForEach(snapshot.sortedCategories.prefix(8)) { category in
-                                CategoryTile(category: category)
-                                    .onTapGesture {
-                                        viewModel.select(category: category)
-                                    }
+                                CategoryTile(
+                                    category: category,
+                                    largestCategoryBytes: snapshot.sortedCategories.first?.totalBytes ?? 1
+                                )
+                                .onTapGesture {
+                                    viewModel.select(category: category)
+                                }
                             }
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: 14) {
-                        SectionHeadline(title: "Groesste Dateien", subtitle: "Direkt verwaltbare Einzeldateien ausserhalb von App-Paketen.")
+                    VStack(alignment: .leading, spacing: 16) {
+                        SectionHeadline(
+                            eyebrow: "Einzeldaten",
+                            title: "Die grössten direkt greifbaren Dateien",
+                            subtitle: "Ausserhalb von App-Paketen, damit du sie direkt prüfen oder entfernen kannst."
+                        )
+
                         FileListCard(
                             title: "Top Dateien",
-                            subtitle: "Per Finder pruefen oder direkt in den Papierkorb verschieben.",
+                            subtitle: "Finder zum Prüfen, Papierkorb zum schnellen Wegschieben.",
                             items: snapshot.largestFiles,
                             viewModel: viewModel
                         )
@@ -87,39 +140,31 @@ struct OverviewDashboard: View {
 
                     if !snapshot.inaccessiblePaths.isEmpty {
                         NoticeCard(
-                            title: "Nicht alles war lesbar",
-                            message: "Einige Pfade waren fuer den Scan nicht zugaenglich. Fuer tiefere Einblicke brauchst du meist Full Disk Access fuer die App oder fuer Xcode."
+                            title: "Ein Teil des Systems blieb geschützt",
+                            message: "Einige Pfade waren für den Scan nicht lesbar. Für tiefere Einblicke braucht die App oder Xcode meist Full Disk Access."
                         ) {
-                            VStack(alignment: .leading, spacing: 6) {
+                            VStack(alignment: .leading, spacing: 8) {
                                 ForEach(snapshot.inaccessiblePaths.prefix(5), id: \.path) { url in
-                                    Text(url.prettyPath)
-                                        .font(.caption.monospaced())
-                                        .foregroundStyle(KleanTheme.mutedInk)
+                                    HStack(spacing: 10) {
+                                        Circle()
+                                            .fill(KleanTheme.warning.opacity(0.22))
+                                            .frame(width: 8, height: 8)
+                                        Text(url.prettyPath)
+                                            .font(.caption.monospaced())
+                                            .foregroundStyle(KleanTheme.mutedInk)
+                                    }
                                 }
                             }
                         }
                     }
                 } else {
                     EmptyStateCard(
-                        title: "Speicher wird gescannt",
-                        message: "klean laeuft die typischen Speicher-Hotspots durch und baut daraus einen verwaltbaren Ueberblick auf."
+                        title: "Der erste Scan baut gerade deinen Überblick auf",
+                        message: "klean läuft typische Speicher-Hotspots ab, zieht daraus verwaltbare Blöcke und ergänzt sie Schritt für Schritt."
                     )
                 }
             }
-            .padding(.bottom, 24)
-        }
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Speicher endlich greifbar")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-                .foregroundStyle(KleanTheme.ink)
-
-            Text("Die App zeigt dir grosse Speicherbereiche, einzelne Verursacher und sichere Aufraeumaktionen. Nicht aufschluesselbare macOS-Systemdaten bleiben als Restblock sichtbar, statt versteckt zu werden.")
-                .font(.title3)
-                .foregroundStyle(KleanTheme.mutedInk)
-                .fixedSize(horizontal: false, vertical: true)
+            .padding(.bottom, 28)
         }
     }
 }
@@ -130,45 +175,16 @@ struct CategoryDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .center, spacing: 14) {
-                        Image(systemName: category.systemImage)
-                            .font(.system(size: 28, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
-                            .frame(width: 56, height: 56)
-                            .background(
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .fill(Color.white.opacity(0.72))
-                            )
+            VStack(alignment: .leading, spacing: 26) {
+                CategoryHeroCard(viewModel: viewModel, category: category)
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(category.title)
-                                .font(.system(size: 28, weight: .bold, design: .rounded))
-                                .foregroundStyle(KleanTheme.ink)
-                            Text(category.subtitle)
-                                .foregroundStyle(KleanTheme.mutedInk)
-                        }
+                VStack(alignment: .leading, spacing: 16) {
+                    SectionHeadline(
+                        eyebrow: "Ordnerstruktur",
+                        title: "Die schwersten Inhalte in \(category.title)",
+                        subtitle: "Direkte Kinder dieses Bereichs, sortiert nach belegtem Speicher."
+                    )
 
-                        Spacer()
-
-                        if let recommendation = category.cleanupRecommendation {
-                            Button(recommendation.buttonLabel) {
-                                viewModel.requestCleanup(recommendation)
-                            }
-                            .buttonStyle(KleanPrimaryActionStyle())
-                        }
-                    }
-
-                    HStack(spacing: 10) {
-                        StatPill(label: "Groesse", value: ByteCountFormatter.storageString(category.totalBytes))
-                        StatPill(label: "Dateien", value: category.itemCount.formatted())
-                        StatPill(label: "Pfad", value: category.url.prettyPath)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 14) {
-                    SectionHeadline(title: "Groesste Inhalte", subtitle: "Direkte Kinder dieses Bereichs, sortiert nach belegtem Speicher.")
                     FileListCard(
                         title: category.title,
                         subtitle: category.subtitle,
@@ -183,11 +199,16 @@ struct CategoryDetailView: View {
                     }
 
                     if !filesInsideCategory.isEmpty {
-                        VStack(alignment: .leading, spacing: 14) {
-                            SectionHeadline(title: "Tiefe Einzeldateien", subtitle: "Die groessten Dateien innerhalb dieses Bereichs, sofern sie nicht in App-Paketen liegen.")
+                        VStack(alignment: .leading, spacing: 16) {
+                            SectionHeadline(
+                                eyebrow: "Tiefenscan",
+                                title: "Grosse Einzelfiles in diesem Bereich",
+                                subtitle: "Hilfreich, wenn du punktuell statt pauschal bereinigen willst."
+                            )
+
                             FileListCard(
                                 title: "Einzeldateien",
-                                subtitle: "Hilfreich fuer punktuelle Bereinigung.",
+                                subtitle: "Grosse Dateien innerhalb von \(category.title).",
                                 items: filesInsideCategory,
                                 viewModel: viewModel
                             )
@@ -195,7 +216,7 @@ struct CategoryDetailView: View {
                     }
                 }
             }
-            .padding(.bottom, 24)
+            .padding(.bottom, 28)
         }
     }
 }
@@ -205,10 +226,18 @@ struct ScanStatusFooter: View {
     let showsCachedData: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Scan Status")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.75))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Scan Status", systemImage: "waveform.path.ecg")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.78))
+
+                Spacer()
+
+                if showsCachedData {
+                    StatusCapsule(text: "Cache", tint: KleanTheme.hazeGold)
+                }
+            }
 
             switch scanState {
             case let .scanning(progress):
@@ -223,22 +252,177 @@ struct ScanStatusFooter: View {
                     .foregroundStyle(.white)
             }
 
-            if showsCachedData {
-                Text("Zeige zuletzt erkannten Stand aus dem Cache.")
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.62))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(showsCachedData ? "Die Ansicht startet aus dem letzten Snapshot und wird schrittweise frisch ersetzt." : "Die angezeigten Werte stammen aus dem aktuellen oder zuletzt abgeschlossenen Lauf.")
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.58))
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color.white.opacity(0.10))
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(Color.white.opacity(0.06), lineWidth: 1)
+        }
+    }
+}
+
+private struct OverviewHeroCard: View {
+    let snapshot: StorageSnapshot?
+    let scanState: ScanState
+    let isShowingCachedData: Bool
+    let openFullDiskAccessSettings: () -> Void
+
+    var body: some View {
+        CardShell {
+            HStack(alignment: .top, spacing: 24) {
+                VStack(alignment: .leading, spacing: 18) {
+                    HeroEyebrow(text: "Storage Control")
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Speicher, der sich endlich wie ein Interface anfühlt")
+                            .font(.system(size: 38, weight: .bold, design: .rounded))
+                            .foregroundStyle(KleanTheme.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text("klean macht Volumen, Hotspots und sichere Cleanup-Aktionen sofort lesbar. Und alles, was macOS nicht transparent erklärt, bleibt sichtbar statt weggeschönt.")
+                            .font(.title3)
+                            .foregroundStyle(KleanTheme.mutedInk)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    HStack(spacing: 10) {
+                        HeroMetricChip(
+                            label: "Frei",
+                            value: snapshot.map { ByteCountFormatter.storageString($0.volume.availableBytes) } ?? "..."
+                        )
+                        HeroMetricChip(
+                            label: "Reclaimable",
+                            value: snapshot.map { ByteCountFormatter.storageString($0.reclaimableBytes) } ?? "..."
+                        )
+                        HeroMetricChip(
+                            label: "Status",
+                            value: isShowingCachedData ? "Cache" : "Live"
+                        )
+                    }
+
+                    HStack(spacing: 12) {
+                        Button("Full Disk Access") {
+                            openFullDiskAccessSettings()
+                        }
+                        .buttonStyle(KleanPrimaryActionStyle())
+
+                        Button("Was wird gerade gezeigt?") {}
+                            .buttonStyle(KleanGhostActionStyle())
+                            .disabled(true)
+                    }
+                }
+
+                Spacer(minLength: 12)
+
+                HeroStorageArtwork(
+                    scanState: scanState,
+                    snapshot: snapshot
+                )
+                .frame(width: 260, height: 240)
+            }
+        }
+    }
+}
+
+private struct OverviewInsightsRow: View {
+    let snapshot: StorageSnapshot
+
+    var body: some View {
+        HStack(spacing: 16) {
+            InsightCard(
+                label: "Analysiert",
+                value: ByteCountFormatter.storageString(snapshot.scannedBytes),
+                note: "\(scanCoverageText(snapshot)) des belegten Volumens",
+                tint: KleanTheme.accent
+            )
+            InsightCard(
+                label: "Direkt bereinigbar",
+                value: ByteCountFormatter.storageString(snapshot.reclaimableBytes),
+                note: "\(snapshot.cleanupRecommendations.count.formatted()) sinnvolle Automationen erkannt",
+                tint: KleanTheme.highlight
+            )
+            InsightCard(
+                label: "System/Rest",
+                value: ByteCountFormatter.storageString(snapshot.unexplainedUsedBytes),
+                note: "Bewusst sichtbar statt schöngerechnet",
+                tint: KleanTheme.info
+            )
+        }
+    }
+
+    private func scanCoverageText(_ snapshot: StorageSnapshot) -> String {
+        let used = max(snapshot.volume.usedBytes, 1)
+        let fraction = Double(snapshot.scannedBytes) / Double(used)
+        return "\(Int((fraction * 100).rounded())) %"
+    }
+}
+
+private struct CategoryHeroCard: View {
+    @ObservedObject var viewModel: StorageDashboardViewModel
+    let category: StorageCategory
+
+    var body: some View {
+        CardShell {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 16) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.white, Color.white.opacity(0.72)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 70, height: 70)
+
+                        Image(systemName: category.systemImage)
+                            .font(.system(size: 28, weight: .semibold))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(KleanTheme.accent, KleanTheme.highlight)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HeroEyebrow(text: "Kategorie")
+
+                        Text(category.title)
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .foregroundStyle(KleanTheme.ink)
+
+                        Text(category.subtitle)
+                            .font(.title3)
+                            .foregroundStyle(KleanTheme.mutedInk)
+
+                        Text(category.url.prettyPath)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(KleanTheme.quietInk)
+                    }
+
+                    Spacer()
+
+                    if let recommendation = category.cleanupRecommendation {
+                        Button(recommendation.buttonLabel) {
+                            viewModel.requestCleanup(recommendation)
+                        }
+                        .buttonStyle(KleanPrimaryActionStyle())
+                    }
+                }
+
+                HStack(spacing: 12) {
+                    StatPill(label: "Groesse", value: ByteCountFormatter.storageString(category.totalBytes))
+                    StatPill(label: "Dateien", value: category.itemCount.formatted())
+                    StatPill(label: "Kinder", value: category.topChildren.count.formatted())
+                }
+            }
         }
     }
 }
@@ -252,42 +436,47 @@ private struct StorageSummaryCard: View {
         let free = max(snapshot.volume.availableBytes, 0)
 
         return [
-            StorageSegment(label: "Analysiert", value: scanned, color: Color(red: 0.17, green: 0.62, blue: 0.39)),
-            StorageSegment(label: "System/Rest", value: rest, color: Color(red: 0.85, green: 0.55, blue: 0.18)),
-            StorageSegment(label: "Frei", value: free, color: Color(red: 0.24, green: 0.42, blue: 0.79))
+            StorageSegment(label: "Analysiert", value: scanned, color: KleanTheme.success),
+            StorageSegment(label: "System/Rest", value: rest, color: KleanTheme.warning),
+            StorageSegment(label: "Frei", value: free, color: KleanTheme.info)
         ]
     }
 
     var body: some View {
         CardShell {
             VStack(alignment: .leading, spacing: 18) {
-                SectionHeadline(title: "Volume", subtitle: "Echte Volumenwerte plus das, was der Scan konkret aufgeschluesselt hat.")
+                SectionHeadline(
+                    eyebrow: "Volume",
+                    title: "Die physische Wahrheit des Laufwerks",
+                    subtitle: "Volumenwerte plus das, was der Scan konkret zuordnen kann."
+                )
 
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(ByteCountFormatter.storageString(snapshot.volume.usedBytes))
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundStyle(KleanTheme.ink)
-                        Text("belegt")
-                            .font(.title3.weight(.medium))
-                            .foregroundStyle(KleanTheme.mutedInk)
-                        Spacer()
-                        Text("\(Int((Double(snapshot.scannedBytes) / Double(max(snapshot.volume.usedBytes, 1))) * 100)) % analysiert")
-                            .font(.headline)
-                            .foregroundStyle(Color.accentColor)
-                    }
+                HStack(alignment: .lastTextBaseline, spacing: 8) {
+                    Text(ByteCountFormatter.storageString(snapshot.volume.usedBytes))
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundStyle(KleanTheme.ink)
+                    Text("belegt")
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(KleanTheme.mutedInk)
+                    Spacer()
+                    StatusCapsule(text: "\(coveragePercent) % analysiert", tint: KleanTheme.accent)
+                }
 
-                    StorageUsageBar(segments: segments, totalBytes: snapshot.volume.totalBytes)
-                        .frame(height: 20)
+                StorageUsageBar(segments: segments, totalBytes: snapshot.volume.totalBytes)
+                    .frame(height: 22)
 
+                VStack(spacing: 10) {
                     ForEach(segments) { segment in
-                        HStack {
+                        HStack(spacing: 12) {
                             Circle()
                                 .fill(segment.color)
                                 .frame(width: 10, height: 10)
+
                             Text(segment.label)
                                 .foregroundStyle(KleanTheme.mutedInk)
+
                             Spacer()
+
                             Text(ByteCountFormatter.storageString(segment.value))
                                 .fontWeight(.semibold)
                                 .foregroundStyle(KleanTheme.ink)
@@ -295,15 +484,18 @@ private struct StorageSummaryCard: View {
                     }
                 }
 
-                Divider()
-
-                HStack(spacing: 14) {
-                    SummaryMetric(title: "Gesamt", value: ByteCountFormatter.storageString(snapshot.volume.totalBytes))
-                    SummaryMetric(title: "Frei", value: ByteCountFormatter.storageString(snapshot.volume.availableBytes))
-                    SummaryMetric(title: "Scanned", value: ByteCountFormatter.storageString(snapshot.scannedBytes))
+                HStack(spacing: 12) {
+                    SummaryMetricCard(title: "Gesamt", value: ByteCountFormatter.storageString(snapshot.volume.totalBytes))
+                    SummaryMetricCard(title: "Frei", value: ByteCountFormatter.storageString(snapshot.volume.availableBytes))
+                    SummaryMetricCard(title: "Wichtig frei", value: ByteCountFormatter.storageString(snapshot.volume.importantAvailableBytes))
                 }
             }
         }
+    }
+
+    private var coveragePercent: Int {
+        let used = max(snapshot.volume.usedBytes, 1)
+        return Int(((Double(snapshot.scannedBytes) / Double(used)) * 100).rounded())
     }
 }
 
@@ -314,46 +506,25 @@ private struct QuickActionsCard: View {
     var body: some View {
         CardShell {
             VStack(alignment: .leading, spacing: 18) {
-                SectionHeadline(title: "Quick Clean", subtitle: "Nur fuer Bereiche mit halbwegs sicherer automatischer Bereinigung.")
+                SectionHeadline(
+                    eyebrow: "Quick Clean",
+                    title: "Empfohlene Aktionen mit vertretbarem Risiko",
+                    subtitle: "Nur Bereiche, die die App halbwegs verantwortbar behandeln kann."
+                )
 
                 if recommendations.isEmpty {
                     EmptyStateCard(
-                        title: "Keine Sofort-Aktionen",
-                        message: "Gerade gibt es nichts Sinnvolles, das die App automatisch bereinigen sollte."
+                        title: "Gerade nichts Automatisierbares",
+                        message: "Im aktuellen Snapshot gibt es keine sinnvolle Sofort-Aktion, die ohne manuelles Prüfen empfohlen werden sollte."
                     )
                 } else {
-                    ForEach(recommendations.prefix(4)) { recommendation in
-                        HStack(alignment: .top, spacing: 14) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack {
-                                    Text(recommendation.title)
-                                        .font(.headline)
-                                        .foregroundStyle(KleanTheme.ink)
-                                    Spacer()
-                                    RiskBadge(risk: recommendation.risk)
-                                }
-
-                                Text(recommendation.summary)
-                                    .foregroundStyle(KleanTheme.mutedInk)
-                                Text("Potenzial: \(ByteCountFormatter.storageString(recommendation.estimatedBytes))")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(KleanTheme.ink)
-                            }
-
-                            Button(recommendation.buttonLabel) {
-                                viewModel.requestCleanup(recommendation)
-                            }
-                            .buttonStyle(KleanPrimaryActionStyle())
-                            .controlSize(.regular)
-                        }
-                        .padding(16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(Color.white.opacity(0.48))
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                    VStack(spacing: 12) {
+                        ForEach(Array(recommendations.prefix(4).enumerated()), id: \.element.id) { index, recommendation in
+                            QuickActionRow(
+                                index: index + 1,
+                                recommendation: recommendation,
+                                execute: { viewModel.requestCleanup(recommendation) }
+                            )
                         }
                     }
                 }
@@ -364,39 +535,78 @@ private struct QuickActionsCard: View {
 
 private struct CategoryTile: View {
     let category: StorageCategory
+    let largestCategoryBytes: Int64
 
     var body: some View {
         CardShell {
             VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Image(systemName: category.systemImage)
-                        .font(.title2)
-                        .foregroundStyle(Color.accentColor)
+                HStack(alignment: .top) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.white.opacity(0.84))
+                            .frame(width: 46, height: 46)
+
+                        Image(systemName: category.systemImage)
+                            .font(.system(size: 18, weight: .semibold))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(KleanTheme.accent, KleanTheme.highlight)
+                    }
+
                     Spacer()
+
                     if category.cleanupRecommendation != nil {
-                        Image(systemName: "sparkles")
-                            .foregroundStyle(.orange)
+                        StatusCapsule(text: "Clean", tint: KleanTheme.highlight)
                     }
                 }
 
-                Text(category.title)
-                    .font(.headline)
-                    .foregroundStyle(KleanTheme.ink)
-                Text(category.subtitle)
-                    .font(.caption)
-                    .foregroundStyle(KleanTheme.mutedInk)
-                    .lineLimit(2)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(category.title)
+                        .font(.headline)
+                        .foregroundStyle(KleanTheme.ink)
+                    Text(category.subtitle)
+                        .font(.caption)
+                        .foregroundStyle(KleanTheme.mutedInk)
+                        .lineLimit(2)
+                }
 
-                Spacer(minLength: 8)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(ByteCountFormatter.storageString(category.totalBytes))
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(KleanTheme.ink)
 
-                Text(ByteCountFormatter.storageString(category.totalBytes))
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(KleanTheme.ink)
-                Text("\(category.itemCount.formatted()) Dateien")
-                    .foregroundStyle(KleanTheme.mutedInk)
+                    Text("\(category.itemCount.formatted()) Dateien")
+                        .foregroundStyle(KleanTheme.mutedInk)
+
+                    GeometryReader { proxy in
+                        ZStack(alignment: .leading) {
+                            Capsule(style: .continuous)
+                                .fill(Color.black.opacity(0.06))
+
+                            Capsule(style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [KleanTheme.accent, KleanTheme.highlight],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: max(proxy.size.width * share, 16))
+                        }
+                    }
+                    .frame(height: 8)
+
+                    Text("\(Int((share * 100).rounded())) % der grössten Kategorie")
+                        .font(.caption)
+                        .foregroundStyle(KleanTheme.quietInk)
+                }
             }
-            .frame(maxWidth: .infinity, minHeight: 170, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 210, alignment: .leading)
         }
+    }
+
+    private var share: CGFloat {
+        let total = max(Double(largestCategoryBytes), 1)
+        return CGFloat(Double(category.totalBytes) / total)
     }
 }
 
@@ -409,61 +619,84 @@ private struct FileListCard: View {
     var body: some View {
         CardShell {
             VStack(alignment: .leading, spacing: 16) {
-                SectionHeadline(title: title, subtitle: subtitle)
+                SectionHeadline(eyebrow: "Liste", title: title, subtitle: subtitle)
 
                 if items.isEmpty {
                     Text("Keine relevanten Elemente gefunden.")
                         .foregroundStyle(KleanTheme.mutedInk)
                 } else {
-                    ForEach(items.prefix(14)) { item in
-                        HStack(alignment: .center, spacing: 14) {
-                            Image(systemName: symbol(for: item.kind))
-                                .font(.title3)
-                                .frame(width: 24)
-                                .foregroundStyle(Color.accentColor)
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(item.name)
-                                    .font(.headline)
-                                    .foregroundStyle(KleanTheme.ink)
-                                    .lineLimit(1)
-                                Text(item.url.deletingLastPathComponent().prettyPath)
-                                    .font(.caption.monospaced())
-                                    .foregroundStyle(KleanTheme.mutedInk)
-                                    .lineLimit(1)
-                            }
-
-                            Spacer(minLength: 16)
-
-                            VStack(alignment: .trailing, spacing: 4) {
-                                Text(ByteCountFormatter.storageString(item.bytes))
-                                    .font(.headline)
-                                    .foregroundStyle(KleanTheme.ink)
-                                Text(detailLine(for: item))
-                                    .font(.caption)
-                                    .foregroundStyle(KleanTheme.mutedInk)
-                            }
-
-                            HStack(spacing: 8) {
-                                Button("Finder") {
-                                    viewModel.reveal(item.url)
-                                }
-                                .buttonStyle(KleanSecondaryActionStyle())
-
-                                Button("Trash") {
-                                    viewModel.requestTrash(item)
-                                }
-                                .buttonStyle(KleanPrimaryActionStyle())
-                            }
-                        }
-                        .padding(.vertical, 4)
-
-                        if item.id != items.prefix(14).last?.id {
-                            Divider()
+                    VStack(spacing: 10) {
+                        ForEach(items.prefix(14)) { item in
+                            FileRowCard(
+                                item: item,
+                                reveal: { viewModel.reveal(item.url) },
+                                trash: { viewModel.requestTrash(item) }
+                            )
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+private struct FileRowCard: View {
+    let item: StorageNode
+    let reveal: () -> Void
+    let trash: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.86))
+                    .frame(width: 42, height: 42)
+
+                Image(systemName: symbol(for: item.kind))
+                    .font(.system(size: 16, weight: .semibold))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(KleanTheme.accent, KleanTheme.highlight)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(item.name)
+                    .font(.headline)
+                    .foregroundStyle(KleanTheme.ink)
+                    .lineLimit(1)
+
+                Text(item.url.deletingLastPathComponent().prettyPath)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(KleanTheme.mutedInk)
+                    .lineLimit(1)
+
+                Text(detailLine(for: item))
+                    .font(.caption)
+                    .foregroundStyle(KleanTheme.quietInk)
+            }
+
+            Spacer(minLength: 16)
+
+            VStack(alignment: .trailing, spacing: 8) {
+                Text(ByteCountFormatter.storageString(item.bytes))
+                    .font(.headline)
+                    .foregroundStyle(KleanTheme.ink)
+
+                HStack(spacing: 8) {
+                    Button("Finder", action: reveal)
+                        .buttonStyle(KleanSecondaryActionStyle())
+                    Button("Trash", action: trash)
+                        .buttonStyle(KleanPrimaryActionStyle())
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.54))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.white.opacity(0.58), lineWidth: 1)
         }
     }
 
@@ -495,11 +728,7 @@ private struct NoticeCard<Content: View>: View {
     var body: some View {
         CardShell {
             VStack(alignment: .leading, spacing: 12) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(KleanTheme.ink)
-                Text(message)
-                    .foregroundStyle(KleanTheme.mutedInk)
+                SectionHeadline(eyebrow: "Hinweis", title: title, subtitle: message)
                 content
             }
         }
@@ -511,15 +740,22 @@ private struct EmptyStateCard: View {
     let message: String
 
     var body: some View {
-        CardShell {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(KleanTheme.ink)
-                Text(message)
-                    .foregroundStyle(KleanTheme.mutedInk)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(KleanTheme.ink)
+            Text(message)
+                .foregroundStyle(KleanTheme.mutedInk)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.48))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.white.opacity(0.52), lineWidth: 1)
         }
     }
 }
@@ -529,35 +765,34 @@ private struct CardShell<Content: View>: View {
 
     var body: some View {
         content
-            .padding(22)
+            .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
                     .fill(
                         LinearGradient(
-                            colors: [
-                                KleanTheme.panelTop,
-                                KleanTheme.panelBottom
-                            ],
+                            colors: [KleanTheme.panelTop, KleanTheme.panelBottom],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
                     .stroke(KleanTheme.panelStroke, lineWidth: 1)
             }
-            .shadow(color: .black.opacity(0.10), radius: 24, y: 14)
+            .shadow(color: KleanTheme.panelShadow, radius: 30, y: 18)
     }
 }
 
 private struct SectionHeadline: View {
+    let eyebrow: String
     let title: String
     let subtitle: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
+            HeroEyebrow(text: eyebrow)
             Text(title)
                 .font(.title3.weight(.bold))
                 .foregroundStyle(KleanTheme.ink)
@@ -567,20 +802,248 @@ private struct SectionHeadline: View {
     }
 }
 
-private struct SummaryMetric: View {
-    let title: String
+private struct HeroEyebrow: View {
+    let text: String
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.system(size: 11, weight: .bold, design: .rounded))
+            .tracking(1.2)
+            .foregroundStyle(KleanTheme.quietInk)
+    }
+}
+
+private struct HeroMetricChip: View {
+    let label: String
     let value: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(KleanTheme.quietInk)
+            Text(value)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(KleanTheme.ink)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.62))
+        )
+    }
+}
+
+private struct HeroStorageArtwork: View {
+    let scanState: ScanState
+    let snapshot: StorageSnapshot?
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 34, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.70),
+                            Color.white.opacity(0.34)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            RoundedRectangle(cornerRadius: 34, style: .continuous)
+                .stroke(Color.white.opacity(0.65), lineWidth: 1)
+
+            VStack(spacing: 18) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.78))
+                        .frame(width: 144, height: 144)
+                        .shadow(color: .black.opacity(0.08), radius: 24, y: 12)
+
+                    Circle()
+                        .trim(from: 0.06, to: min(0.08 + usageFraction * 0.92, 0.98))
+                        .stroke(
+                            AngularGradient(
+                                colors: [KleanTheme.accent, KleanTheme.highlight, KleanTheme.info, KleanTheme.accent],
+                                center: .center
+                            ),
+                            style: StrokeStyle(lineWidth: 20, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-110))
+                        .frame(width: 120, height: 120)
+
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [KleanTheme.hazeGreen.opacity(0.8), KleanTheme.hazeGold.opacity(0.35)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 52, height: 52)
+
+                    Image(systemName: "internaldrive.fill")
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.92))
+                        .offset(y: 68)
+                }
+
+                VStack(spacing: 6) {
+                    Text(scanStateTitle)
+                        .font(.headline)
+                        .foregroundStyle(KleanTheme.ink)
+                    Text(scanStateSubtitle)
+                        .font(.caption)
+                        .foregroundStyle(KleanTheme.mutedInk)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(24)
+        }
+    }
+
+    private var usageFraction: Double {
+        guard let snapshot else { return 0.35 }
+        let total = max(snapshot.volume.totalBytes, 1)
+        return Double(snapshot.volume.usedBytes) / Double(total)
+    }
+
+    private var scanStateTitle: String {
+        switch scanState {
+        case .idle:
+            return "Bereit"
+        case .scanning:
+            return "Scanning"
+        case .ready:
+            return "Snapshot aktuell"
+        case .failed:
+            return "Scan gestoppt"
+        }
+    }
+
+    private var scanStateSubtitle: String {
+        switch scanState {
+        case .idle:
+            return "Die Oberfläche wartet auf einen neuen Lauf."
+        case let .scanning(progress):
+            return progress.statusSummary
+        case let .ready(date):
+            return "Zuletzt aktualisiert am \(date.formatted(date: .abbreviated, time: .shortened))."
+        case let .failed(message):
+            return message
+        }
+    }
+}
+
+private struct InsightCard: View {
+    let label: String
+    let value: String
+    let note: String
+    let tint: Color
+
+    var body: some View {
+        CardShell {
+            VStack(alignment: .leading, spacing: 10) {
+                HeroEyebrow(text: label)
+                Text(value)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundStyle(KleanTheme.ink)
+                Text(note)
+                    .font(.subheadline)
+                    .foregroundStyle(KleanTheme.mutedInk)
+
+                Capsule(style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [tint.opacity(0.95), tint.opacity(0.32)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(height: 6)
+            }
+        }
+    }
+}
+
+private struct QuickActionRow: View {
+    let index: Int
+    let recommendation: CleanupRecommendation
+    let execute: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(KleanTheme.ink.opacity(0.08))
+                    .frame(width: 34, height: 34)
+                Text("\(index)")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(KleanTheme.ink)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(recommendation.title)
+                        .font(.headline)
+                        .foregroundStyle(KleanTheme.ink)
+
+                    Spacer()
+
+                    RiskBadge(risk: recommendation.risk)
+                }
+
+                Text(recommendation.summary)
+                    .foregroundStyle(KleanTheme.mutedInk)
+
+                HStack {
+                    Label(ByteCountFormatter.storageString(recommendation.estimatedBytes), systemImage: "sparkles")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(KleanTheme.ink)
+                    Spacer()
+                    Button(recommendation.buttonLabel, action: execute)
+                        .buttonStyle(KleanPrimaryActionStyle())
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.white.opacity(0.52))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(0.60), lineWidth: 1)
+        }
+    }
+}
+
+private struct SummaryMetricCard: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title.uppercased())
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(KleanTheme.mutedInk)
+                .foregroundStyle(KleanTheme.quietInk)
             Text(value)
                 .font(.title3.weight(.bold))
                 .foregroundStyle(KleanTheme.ink)
         }
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.48))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.55), lineWidth: 1)
+        }
     }
 }
 
@@ -590,20 +1053,37 @@ private struct StatPill: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(label)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(KleanTheme.mutedInk)
+            Text(label.uppercased())
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(KleanTheme.quietInk)
             Text(value)
                 .font(.caption.weight(.bold))
                 .foregroundStyle(KleanTheme.ink)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 13)
+        .padding(.vertical, 9)
         .background(
             Capsule(style: .continuous)
-                .fill(Color.white.opacity(0.66))
+                .fill(Color.white.opacity(0.62))
         )
+    }
+}
+
+private struct StatusCapsule: View {
+    let text: String
+    let tint: Color
+
+    var body: some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(tint.opacity(0.16))
+            )
     }
 }
 
@@ -631,14 +1111,14 @@ private struct KleanPrimaryActionStyle: ButtonStyle {
             .font(.system(size: 13, weight: .bold, design: .rounded))
             .foregroundStyle(Color.white.opacity(isEnabled ? 1 : 0.72))
             .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.accentColor.opacity(isEnabled ? 1 : 0.65),
-                                KleanTheme.highlight.opacity(isEnabled ? 0.95 : 0.55)
+                                KleanTheme.accent.opacity(isEnabled ? 1 : 0.66),
+                                KleanTheme.highlight.opacity(isEnabled ? 0.96 : 0.56)
                             ],
                             startPoint: .leading,
                             endPoint: .trailing
@@ -646,8 +1126,8 @@ private struct KleanPrimaryActionStyle: ButtonStyle {
                     )
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.black.opacity(0.10), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
             }
             .shadow(color: .black.opacity(configuration.isPressed ? 0.06 : 0.14), radius: configuration.isPressed ? 4 : 10, y: configuration.isPressed ? 2 : 6)
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
@@ -663,17 +1143,37 @@ private struct KleanSecondaryActionStyle: ButtonStyle {
             .font(.system(size: 13, weight: .bold, design: .rounded))
             .foregroundStyle(KleanTheme.ink.opacity(isEnabled ? 1 : 0.55))
             .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white.opacity(configuration.isPressed ? 0.86 : 0.72))
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(Color.white.opacity(configuration.isPressed ? 0.90 : 0.74))
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.black.opacity(0.10), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
             }
             .scaleEffect(configuration.isPressed ? 0.99 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+private struct KleanGhostActionStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .bold, design: .rounded))
+            .foregroundStyle(KleanTheme.mutedInk.opacity(isEnabled ? 1 : 0.45))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(Color.white.opacity(0.34))
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(Color.white.opacity(0.44), lineWidth: 1)
+            }
     }
 }
 
@@ -684,25 +1184,27 @@ private struct StorageUsageBar: View {
     var body: some View {
         GeometryReader { proxy in
             let total = max(Double(totalBytes), 1)
-            HStack(spacing: 2) {
+
+            HStack(spacing: 3) {
                 ForEach(segments) { segment in
-                    segment.color
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(segment.color)
                         .frame(width: width(for: segment, total: total, available: proxy.size.width))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(3)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.black.opacity(0.08))
+            )
         }
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.black.opacity(0.08))
-        )
     }
 
     private func width(for segment: StorageSegment, total: Double, available: CGFloat) -> CGFloat {
         guard segment.value > 0 else { return 0 }
         let ratio = Double(segment.value) / total
-        return max(CGFloat(ratio) * available, 12)
+        return max(CGFloat(ratio) * max(available - 6, 0), 12)
     }
 }
 
@@ -717,11 +1219,19 @@ private extension CleanupRisk {
     var color: Color {
         switch self {
         case .low:
-            return Color(red: 0.17, green: 0.62, blue: 0.39)
+            return KleanTheme.success
         case .medium:
-            return Color(red: 0.86, green: 0.55, blue: 0.14)
+            return KleanTheme.warning
         case .high:
-            return Color(red: 0.82, green: 0.23, blue: 0.19)
+            return KleanTheme.danger
+        }
+    }
+}
+
+private extension StorageSnapshot {
+    var reclaimableBytes: Int64 {
+        cleanupRecommendations.reduce(into: 0) { partialResult, recommendation in
+            partialResult += recommendation.estimatedBytes
         }
     }
 }
