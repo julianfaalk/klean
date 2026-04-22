@@ -1,52 +1,91 @@
 # klean
 
 <p align="center">
-  <img src="docs/assets/klean-app-icon-master.png" alt="klean app icon" width="144" />
+  <img src="docs/assets/klean-app-icon-master.png" alt="klean app icon" width="128" />
 </p>
 
 <p align="center">
-  Native macOS storage dashboard and cleanup utility for reclaiming space with confidence.
+  <strong>Native macOS storage cleanup for developer machines.</strong>
 </p>
 
 <p align="center">
-  Built with SwiftUI for developer machines, storage hotspots, and safe cleanup routines.
+  <sub>Scan storage hotspots, surface safe cleanup routines, and reclaim space from Xcode, Flutter, SwiftPM, Docker, and other local build tooling.</sub>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/platform-macOS%2015-1f2937?style=flat-square" alt="macOS 15" />
+  <img src="https://img.shields.io/badge/built%20with-SwiftUI-2f7cf6?style=flat-square" alt="SwiftUI" />
+  <img src="https://img.shields.io/badge/focus-developer%20cleanups-3c8f4f?style=flat-square" alt="Developer cleanups" />
 </p>
 
 ![klean dashboard](docs/assets/klean-dashboard-public.png)
 
-## What It Does
+## What It Is
 
-`klean` gives you a readable overview of what is using storage on your Mac and lets you act on the parts that are reasonably safe to manage.
+`klean` is a native macOS dashboard that combines two jobs:
 
-- Volume overview with analyzed storage, free space, and a transparent `System/Rest` bucket for the parts macOS does not attribute precisely.
-- Hotspot scanning for common storage offenders such as `Documents`, `Downloads`, `Desktop`, `Applications`, `Pictures`, `Movies`, `Music`, `iCloud Drive`, `Caches`, `Xcode DerivedData`, `Xcode Archives`, simulators, and trash.
-- Safe cleanup actions for known areas like user caches, Xcode build data, archives, and trash.
-- Dedicated developer cleanup routines for caches and build artifacts from workflows like Xcode, SwiftPM, Flutter, CoreSimulator, and Docker build cache.
-- Finder integration to reveal files or move items to trash directly from the app.
-- Live feedback after cleanup actions with optimistic UI updates and an immediate rescan.
-- Faster startup through cached snapshots and incremental scan updates while fresh results stream in.
+- explain where storage is going on your Mac
+- give you high-confidence cleanup routines for reclaimable space
 
-## Why It Exists
+The goal is not to guess at hidden macOS internals. The goal is to make the useful, safe, and actionable parts obvious.
 
-macOS exposes some storage categories well and hides others behind vague system totals. `klean` aims to make that tradeoff explicit instead of pretending to know more than the system really provides.
+## Why It Is Useful
 
-The app shows:
+Developer machines accumulate a lot of storage waste that is technically rebuildable but easy to forget:
 
-- what can be scanned and explained
-- what can be cleaned safely
-- what remains opaque and therefore stays visible as `System/Rest`
+- Xcode `DerivedData`
+- old Xcode archives
+- SwiftPM caches
+- Flutter and Dart package caches
+- CoreSimulator caches
+- Docker build cache
+- regular user caches and trash
 
-## Startup And Scan Behavior
+`klean` puts those into one UI, with reclaimable size, risk labeling, and direct actions.
 
-To avoid a blank dashboard every time the app opens, `klean` stores the last successful snapshot in Application Support and restores it immediately on launch. If that snapshot is stale, a fresh scan starts automatically. During scanning, refreshed sections replace the cached data progressively, so you can already see what has been loaded instead of waiting for one big final result.
+## Current Product Direction
 
-## Tech Stack
+The app is moving from a pure storage browser toward a local maintenance dashboard for dev-heavy Macs.
 
-- Swift 6
-- SwiftUI
-- AppKit integration where macOS-specific behavior is needed
-- XcodeGen for project generation
-- Native macOS target, deployment target `macOS 15`
+Today it already covers:
+
+- storage overview with transparent `System/Rest`
+- hotspot scanning for common heavy folders
+- safe cleanup actions for selected locations
+- dedicated developer cleanup routines in the dashboard
+- cached startup with progressive refresh during scans
+
+## Core Features
+
+| Area | What You Get |
+| --- | --- |
+| Storage Overview | Used, free, scanned, and unexplained storage shown without pretending opaque system data is fully understood |
+| Hotspot Scan | Fast scan across common heavy directories like Downloads, Documents, Pictures, Caches, Xcode, and Simulator data |
+| Developer Cleanups | Ready-to-run routines for common rebuildable artifacts from local development workflows |
+| Safety Model | Risk labels such as `Sicher`, `Pruefen`, and `Vorsicht`, plus explicit estimated reclaimable space |
+| Direct Actions | Reveal in Finder, move to Trash, or run a known cleanup routine from the UI |
+| Cached Startup | The last successful snapshot appears immediately while a fresh scan streams in |
+
+## Developer Cleanup Routines
+
+The current dashboard can surface routines like:
+
+- `Xcode DerivedData`
+- `Xcode Archives`
+- `SwiftPM Cache`
+- `Flutter Pub Cache`
+- `CoreSimulator Caches`
+- `Docker Build Cache`
+
+The intent is that these routines are allowlist-based and understandable, not generic “delete random large files” actions.
+
+## Design Principles
+
+- Native macOS app, not an Electron wrapper
+- Local-first scanning and cleanup
+- Clear separation between safe cleanup and areas that still need review
+- No fake precision where macOS itself is opaque
+- Dashboard-first UX instead of raw filesystem browsing
 
 ## Build
 
@@ -62,7 +101,7 @@ xcodegen generate
 open klean.xcodeproj
 ```
 
-Or build from the command line:
+### Build From Terminal
 
 ```bash
 xcodebuild -project klean.xcodeproj -scheme klean -configuration Debug CODE_SIGNING_ALLOWED=NO build
@@ -70,10 +109,10 @@ xcodebuild -project klean.xcodeproj -scheme klean -configuration Debug CODE_SIGN
 
 ## Privacy And Permissions
 
-- All scanning happens locally on your Mac.
-- No storage data is uploaded anywhere by the app.
-- For deeper visibility into protected folders, the app or Xcode may need Full Disk Access.
-- Some system-managed storage remains inherently opaque on macOS. `klean` keeps that explicit instead of guessing.
+- All scanning happens locally on your Mac
+- No storage data is uploaded anywhere by the app
+- Full Disk Access may be needed for deeper visibility into protected folders
+- Some storage remains inherently opaque on macOS, and `klean` keeps that visible instead of hiding it
 
 ## Project Structure
 
@@ -86,16 +125,7 @@ klean/
 project.yml
 ```
 
-## Current Scope
-
-This repository is focused on a polished first native desktop version:
-
-- strong visual overview
-- practical cleanup workflows
-- developer-first routine cleanup dashboard
-- live state updates
-- cached startup instead of repeated cold scans
-
 ## Notes
 
-The current app copy is mostly German. The codebase and repository documentation are kept in English so the project is easier to share publicly.
+- The app UI is currently mostly German
+- The repository and code comments stay in English for public sharing
