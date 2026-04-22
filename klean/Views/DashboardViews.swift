@@ -105,16 +105,18 @@ struct OverviewDashboard: View {
                         )
                     }
 
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 18) {
+                    HStack(alignment: .top, spacing: 18) {
                         StorageSummaryCard(snapshot: snapshot)
+                            .frame(maxWidth: .infinity, minHeight: 366, alignment: .top)
                         QuickActionsCard(viewModel: viewModel, recommendations: snapshot.generalCleanupRecommendations)
+                            .frame(maxWidth: .infinity, minHeight: 366, alignment: .top)
                     }
 
                     VStack(alignment: .leading, spacing: 16) {
                         SectionHeadline(
-                            eyebrow: "Bereiche",
-                            title: "Die grössten Speicherblöcke zuerst",
-                            subtitle: "Die wichtigsten Flächen im gescannten Bereich, mit Gewichtung nach belegtem Speicher."
+                            eyebrow: "Categories",
+                            title: "The largest storage blocks first",
+                            subtitle: "The most important areas inside the scanned surface, weighted by used storage."
                         )
 
                         LazyVGrid(columns: categoryColumns, spacing: 18) {
@@ -132,14 +134,14 @@ struct OverviewDashboard: View {
 
                     VStack(alignment: .leading, spacing: 16) {
                         SectionHeadline(
-                            eyebrow: "Einzeldaten",
-                            title: "Die grössten direkt greifbaren Dateien",
-                            subtitle: "Ausserhalb von App-Paketen, damit du sie direkt prüfen oder entfernen kannst."
+                            eyebrow: "Files",
+                            title: "The largest directly actionable files",
+                            subtitle: "Outside app bundles, so you can inspect or remove them immediately."
                         )
 
                         FileListCard(
-                            title: "Top Dateien",
-                            subtitle: "Finder zum Prüfen, Papierkorb zum schnellen Wegschieben.",
+                            title: "Top Files",
+                            subtitle: "Use Finder to inspect, or move them to Trash right away.",
                             items: snapshot.largestFiles,
                             viewModel: viewModel
                         )
@@ -147,8 +149,8 @@ struct OverviewDashboard: View {
 
                     if !snapshot.inaccessiblePaths.isEmpty {
                         NoticeCard(
-                            title: "Ein Teil des Systems blieb geschützt",
-                            message: "Einige Pfade waren für den Scan nicht lesbar. Für tiefere Einblicke braucht die App oder Xcode meist Full Disk Access."
+                            title: "Part of the system stayed protected",
+                            message: "Some paths could not be read during the scan. For deeper visibility, the app or Xcode usually needs Full Disk Access."
                         ) {
                             VStack(alignment: .leading, spacing: 8) {
                                 ForEach(snapshot.inaccessiblePaths.prefix(5), id: \.path) { url in
@@ -166,8 +168,8 @@ struct OverviewDashboard: View {
                     }
                 } else {
                     EmptyStateCard(
-                        title: "Der erste Scan baut gerade deinen Überblick auf",
-                        message: "klean läuft typische Speicher-Hotspots ab, zieht daraus verwaltbare Blöcke und ergänzt sie Schritt für Schritt."
+                        title: "The first scan is building your overview",
+                        message: "klean is walking the usual storage hotspots and assembling an actionable view step by step."
                     )
                 }
             }
@@ -187,9 +189,9 @@ struct CategoryDetailView: View {
 
                 VStack(alignment: .leading, spacing: 16) {
                     SectionHeadline(
-                        eyebrow: "Ordnerstruktur",
-                        title: "Die schwersten Inhalte in \(category.title)",
-                        subtitle: "Direkte Kinder dieses Bereichs, sortiert nach belegtem Speicher."
+                        eyebrow: "Structure",
+                        title: "The heaviest contents in \(category.title)",
+                        subtitle: "Direct children of this area, sorted by allocated storage."
                     )
 
                     FileListCard(
@@ -208,14 +210,14 @@ struct CategoryDetailView: View {
                     if !filesInsideCategory.isEmpty {
                         VStack(alignment: .leading, spacing: 16) {
                             SectionHeadline(
-                                eyebrow: "Tiefenscan",
-                                title: "Grosse Einzelfiles in diesem Bereich",
-                                subtitle: "Hilfreich, wenn du punktuell statt pauschal bereinigen willst."
+                                eyebrow: "Deep Scan",
+                                title: "Large individual files inside this area",
+                                subtitle: "Useful when you want targeted cleanup instead of sweeping cleanup."
                             )
 
                             FileListCard(
-                                title: "Einzeldateien",
-                                subtitle: "Grosse Dateien innerhalb von \(category.title).",
+                                title: "Individual Files",
+                                subtitle: "Large files found inside \(category.title).",
                                 items: filesInsideCategory,
                                 viewModel: viewModel
                             )
@@ -242,7 +244,7 @@ struct ScanStatusFooter: View {
                 Spacer()
 
                 if showsCachedData {
-                    StatusCapsule(text: "Cache", tint: KleanTheme.hazeGold)
+                    StatusCapsule(text: "Cached", tint: KleanTheme.hazeGold)
                 }
             }
 
@@ -259,7 +261,7 @@ struct ScanStatusFooter: View {
                     .foregroundStyle(.white)
             }
 
-            Text(showsCachedData ? "Die Ansicht startet aus dem letzten Snapshot und wird schrittweise frisch ersetzt." : "Die angezeigten Werte stammen aus dem aktuellen oder zuletzt abgeschlossenen Lauf.")
+            Text(showsCachedData ? "This view starts from the last snapshot and is replaced progressively with fresh scan data." : "The values shown come from the current run or the most recently completed scan.")
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.58))
                 .fixedSize(horizontal: false, vertical: true)
@@ -285,25 +287,26 @@ private struct OverviewHeroCard: View {
 
     var body: some View {
         CardShell {
-            HStack(alignment: .top, spacing: 24) {
+            HStack(alignment: .center, spacing: 28) {
                 VStack(alignment: .leading, spacing: 18) {
                     HeroEyebrow(text: "Storage Control")
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Speicher, der sich endlich wie ein Interface anfühlt")
+                        Text("Storage that finally feels like an interface")
                             .font(.system(size: 38, weight: .bold, design: .rounded))
                             .foregroundStyle(KleanTheme.ink)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        Text("klean macht Volumen, Hotspots und sichere Cleanup-Aktionen sofort lesbar. Und alles, was macOS nicht transparent erklärt, bleibt sichtbar statt weggeschönt.")
-                            .font(.title3)
+                        Text("klean makes volume usage, heavy hotspots, and safe cleanup actions readable at a glance. Anything macOS keeps opaque stays visible instead of being hand-waved away.")
+                            .font(.title3.weight(.medium))
                             .foregroundStyle(KleanTheme.mutedInk)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     HStack(spacing: 10) {
                         HeroMetricChip(
-                            label: "Frei",
+                            label: "Free",
                             value: snapshot.map { ByteCountFormatter.storageString($0.volume.availableBytes) } ?? "..."
                         )
                         HeroMetricChip(
@@ -321,21 +324,23 @@ private struct OverviewHeroCard: View {
                             openFullDiskAccessSettings()
                         }
                         .buttonStyle(KleanPrimaryActionStyle())
+                        .frame(height: 42)
 
-                        Button("Was wird gerade gezeigt?") {}
+                        Button("What am I seeing?") {}
                             .buttonStyle(KleanGhostActionStyle())
                             .disabled(true)
+                            .frame(height: 42)
                     }
                 }
-
-                Spacer(minLength: 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 HeroStorageArtwork(
                     scanState: scanState,
                     snapshot: snapshot
                 )
-                .frame(width: 260, height: 240)
+                .frame(width: 280, height: 244)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -344,32 +349,35 @@ private struct OverviewInsightsRow: View {
     let snapshot: StorageSnapshot
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(alignment: .top, spacing: 16) {
             InsightCard(
-                label: "Analysiert",
+                label: "Scanned",
                 value: ByteCountFormatter.storageString(snapshot.scannedBytes),
-                note: "\(scanCoverageText(snapshot)) des belegten Volumens",
+                note: "\(scanCoverageText(snapshot)) of used volume is mapped",
                 tint: KleanTheme.accent
             )
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             InsightCard(
-                label: "Direkt bereinigbar",
+                label: "Reclaimable",
                 value: ByteCountFormatter.storageString(snapshot.reclaimableBytes),
-                note: "\(snapshot.allCleanupRecommendations.count.formatted()) sinnvolle Routinen erkannt",
+                note: "\(snapshot.allCleanupRecommendations.count.formatted()) useful routines available",
                 tint: KleanTheme.highlight
             )
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             InsightCard(
                 label: "System/Rest",
                 value: ByteCountFormatter.storageString(snapshot.unexplainedUsedBytes),
-                note: "Bewusst sichtbar statt schöngerechnet",
+                note: "Shown explicitly instead of pretending to know more",
                 tint: KleanTheme.info
             )
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
 
     private func scanCoverageText(_ snapshot: StorageSnapshot) -> String {
         let used = max(snapshot.volume.usedBytes, 1)
         let fraction = Double(snapshot.scannedBytes) / Double(used)
-        return "\(Int((fraction * 100).rounded())) %"
+        return "\(Int((fraction * 100).rounded()))%"
     }
 }
 
@@ -399,7 +407,7 @@ private struct CategoryHeroCard: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        HeroEyebrow(text: "Kategorie")
+                        HeroEyebrow(text: "Category")
 
                         Text(category.title)
                             .font(.system(size: 32, weight: .bold, design: .rounded))
@@ -425,9 +433,9 @@ private struct CategoryHeroCard: View {
                 }
 
                 HStack(spacing: 12) {
-                    StatPill(label: "Groesse", value: ByteCountFormatter.storageString(category.totalBytes))
-                    StatPill(label: "Dateien", value: category.itemCount.formatted())
-                    StatPill(label: "Kinder", value: category.topChildren.count.formatted())
+                    StatPill(label: "Size", value: ByteCountFormatter.storageString(category.totalBytes))
+                    StatPill(label: "Files", value: category.itemCount.formatted())
+                    StatPill(label: "Children", value: category.topChildren.count.formatted())
                 }
             }
         }
@@ -443,9 +451,9 @@ private struct StorageSummaryCard: View {
         let free = max(snapshot.volume.availableBytes, 0)
 
         return [
-            StorageSegment(label: "Analysiert", value: scanned, color: KleanTheme.success),
+            StorageSegment(label: "Scanned", value: scanned, color: KleanTheme.success),
             StorageSegment(label: "System/Rest", value: rest, color: KleanTheme.warning),
-            StorageSegment(label: "Frei", value: free, color: KleanTheme.info)
+            StorageSegment(label: "Free", value: free, color: KleanTheme.info)
         ]
     }
 
@@ -454,19 +462,19 @@ private struct StorageSummaryCard: View {
             VStack(alignment: .leading, spacing: 18) {
                 SectionHeadline(
                     eyebrow: "Volume",
-                    title: "Die physische Wahrheit des Laufwerks",
-                    subtitle: "Volumenwerte plus das, was der Scan konkret zuordnen kann."
+                    title: "The physical truth of the drive",
+                    subtitle: "Volume-level numbers plus the storage the scan can clearly attribute."
                 )
 
                 HStack(alignment: .lastTextBaseline, spacing: 8) {
                     Text(ByteCountFormatter.storageString(snapshot.volume.usedBytes))
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .foregroundStyle(KleanTheme.ink)
-                    Text("belegt")
+                    Text("used")
                         .font(.title3.weight(.medium))
                         .foregroundStyle(KleanTheme.mutedInk)
                     Spacer()
-                    StatusCapsule(text: "\(coveragePercent) % analysiert", tint: KleanTheme.accent)
+                    StatusCapsule(text: "\(coveragePercent)% scanned", tint: KleanTheme.accent)
                 }
 
                 StorageUsageBar(segments: segments, totalBytes: snapshot.volume.totalBytes)
@@ -492,11 +500,12 @@ private struct StorageSummaryCard: View {
                 }
 
                 HStack(spacing: 12) {
-                    SummaryMetricCard(title: "Gesamt", value: ByteCountFormatter.storageString(snapshot.volume.totalBytes))
-                    SummaryMetricCard(title: "Frei", value: ByteCountFormatter.storageString(snapshot.volume.availableBytes))
-                    SummaryMetricCard(title: "Wichtig frei", value: ByteCountFormatter.storageString(snapshot.volume.importantAvailableBytes))
+                    SummaryMetricCard(title: "Total", value: ByteCountFormatter.storageString(snapshot.volume.totalBytes))
+                    SummaryMetricCard(title: "Free", value: ByteCountFormatter.storageString(snapshot.volume.availableBytes))
+                    SummaryMetricCard(title: "Important Free", value: ByteCountFormatter.storageString(snapshot.volume.importantAvailableBytes))
                 }
             }
+            .frame(maxHeight: .infinity, alignment: .topLeading)
         }
     }
 
@@ -515,14 +524,14 @@ private struct QuickActionsCard: View {
             VStack(alignment: .leading, spacing: 18) {
                 SectionHeadline(
                     eyebrow: "Quick Clean",
-                    title: "Empfohlene Aktionen mit vertretbarem Risiko",
-                    subtitle: "Nur Bereiche, die die App halbwegs verantwortbar behandeln kann."
+                    title: "Recommended actions with acceptable risk",
+                    subtitle: "Only areas the app can handle responsibly without turning into a file shredder."
                 )
 
                 if recommendations.isEmpty {
                     EmptyStateCard(
-                        title: "Gerade nichts Automatisierbares",
-                        message: "Im aktuellen Snapshot gibt es keine sinnvolle Sofort-Aktion, die ohne manuelles Prüfen empfohlen werden sollte."
+                        title: "Nothing automatable right now",
+                        message: "In the current snapshot, there is no immediate action that should be recommended without manual review."
                     )
                 } else {
                     VStack(spacing: 12) {
@@ -535,7 +544,9 @@ private struct QuickActionsCard: View {
                         }
                     }
                 }
+                Spacer(minLength: 0)
             }
+            .frame(maxHeight: .infinity, alignment: .topLeading)
         }
     }
 }
@@ -549,11 +560,11 @@ private struct DeveloperRoutinesCard: View {
             VStack(alignment: .leading, spacing: 18) {
                 SectionHeadline(
                     eyebrow: "Developer Cleanups",
-                    title: "Routine-Jobs fuer deinen Dev-Mac",
-                    subtitle: "Sichere Kandidaten aus Xcode, SwiftPM, Flutter und Docker, die du direkt aus dem Dashboard ausfuehren kannst."
+                    title: "Routine jobs for your development Mac",
+                    subtitle: "High-confidence candidates from Xcode, SwiftPM, Flutter, and Docker that you can run directly from the dashboard."
                 )
 
-                VStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 12) {
                     ForEach(recommendations.prefix(6)) { recommendation in
                         DeveloperRoutineRow(
                             recommendation: recommendation,
@@ -588,7 +599,7 @@ private struct CategoryTile: View {
                     Spacer()
 
                     if category.cleanupRecommendation != nil {
-                        StatusCapsule(text: "Clean", tint: KleanTheme.highlight)
+                        StatusCapsule(text: "Ready", tint: KleanTheme.highlight)
                     }
                 }
 
@@ -602,12 +613,14 @@ private struct CategoryTile: View {
                         .lineLimit(2)
                 }
 
+                Spacer(minLength: 0)
+
                 VStack(alignment: .leading, spacing: 8) {
                     Text(ByteCountFormatter.storageString(category.totalBytes))
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundStyle(KleanTheme.ink)
 
-                    Text("\(category.itemCount.formatted()) Dateien")
+                    Text("\(category.itemCount.formatted()) files")
                         .foregroundStyle(KleanTheme.mutedInk)
 
                     GeometryReader { proxy in
@@ -628,12 +641,12 @@ private struct CategoryTile: View {
                     }
                     .frame(height: 8)
 
-                    Text("\(Int((share * 100).rounded())) % der grössten Kategorie")
+                    Text("\(Int((share * 100).rounded()))% of the largest category")
                         .font(.caption)
                         .foregroundStyle(KleanTheme.quietInk)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 210, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 220, alignment: .leading)
         }
     }
 
@@ -652,10 +665,10 @@ private struct FileListCard: View {
     var body: some View {
         CardShell {
             VStack(alignment: .leading, spacing: 16) {
-                SectionHeadline(eyebrow: "Liste", title: title, subtitle: subtitle)
+                SectionHeadline(eyebrow: "List", title: title, subtitle: subtitle)
 
                 if items.isEmpty {
-                    Text("Keine relevanten Elemente gefunden.")
+                    Text("No relevant items found.")
                         .foregroundStyle(KleanTheme.mutedInk)
                 } else {
                     VStack(spacing: 10) {
@@ -706,6 +719,7 @@ private struct FileRowCard: View {
                     .font(.caption)
                     .foregroundStyle(KleanTheme.quietInk)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Spacer(minLength: 16)
 
@@ -715,14 +729,16 @@ private struct FileRowCard: View {
                     .foregroundStyle(KleanTheme.ink)
 
                 HStack(spacing: 8) {
-                    Button("Finder", action: reveal)
+                    Button("Reveal", action: reveal)
                         .buttonStyle(KleanSecondaryActionStyle())
                     Button("Trash", action: trash)
                         .buttonStyle(KleanPrimaryActionStyle())
                 }
             }
+            .frame(minWidth: 152, alignment: .trailing)
         }
         .padding(14)
+        .frame(minHeight: 94)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color.white.opacity(0.54))
@@ -745,9 +761,9 @@ private struct FileRowCard: View {
     }
 
     private func detailLine(for item: StorageNode) -> String {
-        let base = item.modifiedAt?.formatted(date: .abbreviated, time: .omitted) ?? "ohne Datum"
+        let base = item.modifiedAt?.formatted(date: .abbreviated, time: .omitted) ?? "No date"
         if item.isDirectoryLike {
-            return "\(item.itemCount.formatted()) Dateien • \(base)"
+            return "\(item.itemCount.formatted()) files • \(base)"
         }
         return base
     }
@@ -761,7 +777,7 @@ private struct NoticeCard<Content: View>: View {
     var body: some View {
         CardShell {
             VStack(alignment: .leading, spacing: 12) {
-                SectionHeadline(eyebrow: "Hinweis", title: title, subtitle: message)
+                SectionHeadline(eyebrow: "Notice", title: title, subtitle: message)
                 content
             }
         }
@@ -779,9 +795,10 @@ private struct EmptyStateCard: View {
                 .foregroundStyle(KleanTheme.ink)
             Text(message)
                 .foregroundStyle(KleanTheme.mutedInk)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color.white.opacity(0.48))
@@ -798,7 +815,7 @@ private struct CardShell<Content: View>: View {
 
     var body: some View {
         content
-            .padding(24)
+            .padding(22)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
@@ -830,7 +847,9 @@ private struct SectionHeadline: View {
                 .font(.title3.weight(.bold))
                 .foregroundStyle(KleanTheme.ink)
             Text(subtitle)
+                .font(.body)
                 .foregroundStyle(KleanTheme.mutedInk)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -861,8 +880,9 @@ private struct HeroMetricChip: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .frame(minWidth: 102, minHeight: 56, alignment: .leading)
         .background(
-            Capsule(style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color.white.opacity(0.62))
         )
     }
@@ -889,45 +909,33 @@ private struct HeroStorageArtwork: View {
             RoundedRectangle(cornerRadius: 34, style: .continuous)
                 .stroke(Color.white.opacity(0.65), lineWidth: 1)
 
-            VStack(spacing: 18) {
+            VStack(spacing: 16) {
                 ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.62))
-                        .frame(width: 180, height: 180)
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(Color.white.opacity(0.54))
+                        .frame(width: 196, height: 176)
                         .blur(radius: 8)
 
                     Image("BrandMark")
                         .resizable()
                         .interpolation(.high)
                         .scaledToFit()
-                        .frame(width: 154, height: 154)
+                        .frame(width: 150, height: 150)
                         .shadow(color: .black.opacity(0.14), radius: 24, y: 14)
-
-                    VStack {
-                        HStack {
-                            Spacer()
-                            StatusCapsule(
-                                text: snapshot.map { ByteCountFormatter.storageString($0.reclaimableBytes) } ?? "...",
-                                tint: KleanTheme.highlight
-                            )
-                        }
-                        Spacer()
-                    }
-                    .padding(.top, 8)
-                    .padding(.horizontal, 12)
-
-                    VStack {
-                        Spacer()
-                        HStack {
-                            StatusCapsule(
-                                text: "\(Int((usageFraction * 100).rounded())) % belegt",
-                                tint: KleanTheme.accent
-                            )
-                            Spacer()
-                        }
-                    }
-                    .padding(.bottom, 8)
-                    .padding(.horizontal, 12)
+                }
+                .overlay(alignment: .topTrailing) {
+                    StatusCapsule(
+                        text: snapshot.map { ByteCountFormatter.storageString($0.reclaimableBytes) } ?? "...",
+                        tint: KleanTheme.highlight
+                    )
+                    .offset(x: 2, y: -6)
+                }
+                .overlay(alignment: .bottomLeading) {
+                    StatusCapsule(
+                        text: "\(Int((usageFraction * 100).rounded()))% used",
+                        tint: KleanTheme.accent
+                    )
+                    .offset(x: -2, y: 8)
                 }
 
                 VStack(spacing: 6) {
@@ -938,9 +946,10 @@ private struct HeroStorageArtwork: View {
                         .font(.caption)
                         .foregroundStyle(KleanTheme.mutedInk)
                         .multilineTextAlignment(.center)
+                        .frame(maxWidth: 210)
                 }
             }
-            .padding(24)
+            .padding(22)
         }
     }
 
@@ -953,24 +962,24 @@ private struct HeroStorageArtwork: View {
     private var scanStateTitle: String {
         switch scanState {
         case .idle:
-            return "Bereit"
+            return "Ready"
         case .scanning:
             return "Scanning"
         case .ready:
-            return "Snapshot aktuell"
+            return "Snapshot Current"
         case .failed:
-            return "Scan gestoppt"
+            return "Scan Stopped"
         }
     }
 
     private var scanStateSubtitle: String {
         switch scanState {
         case .idle:
-            return "Die Oberfläche wartet auf einen neuen Lauf."
+            return "The interface is waiting for the next run."
         case let .scanning(progress):
             return progress.statusSummary
         case let .ready(date):
-            return "Zuletzt aktualisiert am \(date.formatted(date: .abbreviated, time: .shortened))."
+            return "Last refreshed on \(date.formatted(date: .abbreviated, time: .shortened))."
         case let .failed(message):
             return message
         }
@@ -993,6 +1002,9 @@ private struct InsightCard: View {
                 Text(note)
                     .font(.subheadline)
                     .foregroundStyle(KleanTheme.mutedInk)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
 
                 Capsule(style: .continuous)
                     .fill(
@@ -1004,6 +1016,7 @@ private struct InsightCard: View {
                     )
                     .frame(height: 6)
             }
+            .frame(maxWidth: .infinity, minHeight: 126, alignment: .topLeading)
         }
     }
 }
@@ -1037,6 +1050,7 @@ private struct QuickActionRow: View {
 
                 Text(recommendation.summary)
                     .foregroundStyle(KleanTheme.mutedInk)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 HStack {
                     Label(ByteCountFormatter.storageString(recommendation.estimatedBytes), systemImage: "sparkles")
@@ -1047,8 +1061,10 @@ private struct QuickActionRow: View {
                         .buttonStyle(KleanPrimaryActionStyle())
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(16)
+        .frame(minHeight: 132)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color.white.opacity(0.52))
@@ -1094,6 +1110,7 @@ private struct DeveloperRoutineRow: View {
 
                 Text(recommendation.summary)
                     .foregroundStyle(KleanTheme.mutedInk)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 10) {
                     if let detailText = recommendation.detailText {
@@ -1109,8 +1126,10 @@ private struct DeveloperRoutineRow: View {
                         .buttonStyle(KleanPrimaryActionStyle())
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(16)
+        .frame(minHeight: 124)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(Color.white.opacity(0.54))
@@ -1136,7 +1155,7 @@ private struct SummaryMetricCard: View {
                 .foregroundStyle(KleanTheme.ink)
         }
         .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color.white.opacity(0.48))

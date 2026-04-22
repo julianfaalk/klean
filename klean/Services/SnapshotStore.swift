@@ -7,7 +7,7 @@ struct SnapshotStore {
         var errorDescription: String? {
             switch self {
             case .unavailableDirectory:
-                return "Der lokale Snapshot-Speicher konnte nicht vorbereitet werden."
+                return "The local snapshot store could not be prepared."
             }
         }
     }

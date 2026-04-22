@@ -27,12 +27,12 @@ struct ContentView: View {
         .navigationSplitViewStyle(.balanced)
         .toolbar {
             ToolbarItemGroup {
-                ToolbarActionButton(title: "Neu scannen", systemImage: "arrow.clockwise.circle.fill") {
+                ToolbarActionButton(title: "Rescan", systemImage: "arrow.clockwise.circle.fill") {
                     viewModel.startScan()
                 }
 
                 if case .scanning = viewModel.scanState {
-                    ToolbarActionButton(title: "Scan stoppen", systemImage: "stop.circle.fill") {
+                    ToolbarActionButton(title: "Stop Scan", systemImage: "stop.circle.fill") {
                         viewModel.cancelScan()
                     }
                 }
@@ -54,10 +54,10 @@ struct ContentView: View {
                 return Alert(
                     title: Text(title),
                     message: Text(message),
-                    primaryButton: .destructive(Text("Ausfuehren")) {
+                    primaryButton: .destructive(Text("Run")) {
                         viewModel.perform(action)
                     },
-                    secondaryButton: .cancel(Text("Abbrechen"))
+                    secondaryButton: .cancel(Text("Cancel"))
                 )
             }
         }
@@ -79,7 +79,7 @@ private struct SidebarView: View {
         ZStack {
             SidebarBackground()
 
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 16) {
                 SidebarHeader(snapshot: viewModel.snapshot)
 
                 SidebarOverviewButton(
@@ -118,7 +118,7 @@ private struct SidebarView: View {
                     showsCachedData: viewModel.isShowingCachedData
                 )
             }
-            .padding(20)
+            .padding(18)
         }
     }
 
@@ -138,7 +138,7 @@ private struct SidebarHeader: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("klean")
                         .font(.system(size: 26, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
+                        .foregroundStyle(.white)
                     Text("Storage control center")
                         .font(.callout)
                         .foregroundStyle(.white.opacity(0.64))
@@ -148,11 +148,11 @@ private struct SidebarHeader: View {
             if let snapshot {
                 HStack(spacing: 10) {
                     SidebarInfoChip(
-                        label: "Belegt",
+                        label: "Used",
                         value: ByteCountFormatter.storageString(snapshot.volume.usedBytes)
                     )
                     SidebarInfoChip(
-                        label: "Frei",
+                        label: "Free",
                         value: ByteCountFormatter.storageString(snapshot.volume.availableBytes)
                     )
                 }
@@ -166,10 +166,10 @@ private struct SidebarHeader: View {
 
     private var snapshotStatus: String {
         guard let snapshot else {
-            return "Noch kein Snapshot geladen."
+            return "No snapshot loaded yet."
         }
 
-        return "Letzter Stand: \(snapshot.scannedAt.formatted(date: .abbreviated, time: .shortened))"
+        return "Last snapshot: \(snapshot.scannedAt.formatted(date: .abbreviated, time: .shortened))"
     }
 }
 
@@ -188,6 +188,7 @@ private struct SidebarInfoChip: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        .frame(minHeight: 62)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -237,15 +238,16 @@ private struct SidebarOverviewButton: View {
                 Image(systemName: "square.grid.2x2.fill")
                     .font(.system(size: 14, weight: .semibold))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Uebersicht")
+                    Text("Overview")
                         .font(.headline)
-                    Text("Alle Hotspots auf einen Blick")
+                    Text("All major hotspots at a glance")
                         .font(.caption)
                         .foregroundStyle(isSelected ? .white.opacity(0.82) : .white.opacity(0.52))
                 }
                 Spacer()
             }
             .padding(14)
+            .frame(minHeight: 62)
             .foregroundStyle(.white)
             .background(sidebarSelectionBackground(isSelected: isSelected))
         }
@@ -265,8 +267,8 @@ private struct SidebarCategoryButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center, spacing: 12) {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(isSelected ? Color.white.opacity(0.12) : Color.black.opacity(0.16))
                         .frame(width: 36, height: 36)
@@ -277,7 +279,7 @@ private struct SidebarCategoryButton: View {
                         }
 
                     VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text(category.title)
                                 .font(.system(size: 14, weight: .bold, design: .rounded))
                                 .foregroundStyle(.white)
@@ -315,6 +317,7 @@ private struct SidebarCategoryButton: View {
                 .frame(height: 6)
             }
             .padding(14)
+            .frame(minHeight: 88)
             .background(sidebarSelectionBackground(isSelected: isSelected))
         }
         .buttonStyle(.plain)

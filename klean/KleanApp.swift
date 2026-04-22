@@ -14,7 +14,7 @@ struct KleanApp: App {
         .windowToolbarStyle(.unified(showsTitle: false))
         .commands {
             CommandGroup(after: .appInfo) {
-                Button("Neu Scannen") {
+                Button("Rescan") {
                     viewModel.startScan()
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])

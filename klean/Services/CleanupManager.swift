@@ -9,13 +9,13 @@ struct CleanupManager: Sendable {
         var errorDescription: String? {
             switch self {
             case .nothingToClean:
-                return "Es gab nichts zu bereinigen."
+                return "There was nothing to clean."
             case let .partialFailure(failures):
                 let preview = failures.prefix(3).joined(separator: ", ")
                 if preview.isEmpty {
-                    return "\(failures.count) Elemente konnten nicht verarbeitet werden."
+                    return "\(failures.count) items could not be processed."
                 }
-                return "\(failures.count) Elemente konnten nicht verarbeitet werden: \(preview)"
+                return "\(failures.count) items could not be processed: \(preview)"
             case let .commandFailed(message):
                 return message
             }
@@ -32,7 +32,7 @@ struct CleanupManager: Sendable {
             try moveItemToTrash(recommendation.targetURL)
         case .runCommand:
             guard let command = recommendation.command else {
-                throw CleanupError.commandFailed("Der Cleanup-Command fehlt.")
+                throw CleanupError.commandFailed("The cleanup command is missing.")
             }
             try runCommand(
                 executable: command.executable,
@@ -130,7 +130,7 @@ struct CleanupManager: Sendable {
             let data = errorPipe.fileHandleForReading.readDataToEndOfFile()
             let message = String(data: data, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            throw CleanupError.commandFailed(message?.isEmpty == false ? message! : "Die Bereinigung konnte nicht abgeschlossen werden.")
+            throw CleanupError.commandFailed(message?.isEmpty == false ? message! : "The cleanup could not be completed.")
         }
     }
 }

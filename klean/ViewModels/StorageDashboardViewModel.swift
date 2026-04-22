@@ -59,7 +59,7 @@ final class StorageDashboardViewModel: ObservableObject {
         }
 
         scanTask?.cancel()
-        scanState = .scanning(.init(currentTargetTitle: "Vorbereitung", completedTargets: 0, totalTargets: 1))
+        scanState = .scanning(.init(currentTargetTitle: "Preparing", completedTargets: 0, totalTargets: 1))
 
         scanTask = Task { [weak self] in
             guard let self else { return }
@@ -89,7 +89,7 @@ final class StorageDashboardViewModel: ObservableObject {
                 self.scanState = .failed(error.localizedDescription)
                 self.activeAlert = AppAlert(
                     kind: .info(
-                        title: "Scan fehlgeschlagen",
+                        title: "Scan Failed",
                         message: error.localizedDescription
                     )
                 )
@@ -128,13 +128,13 @@ final class StorageDashboardViewModel: ObservableObject {
         case .runCommand:
             targetLine = recommendation.detailText.map { "Routine: \($0)" } ?? "Routine: Command"
         default:
-            targetLine = "Ziel: \(recommendation.detailText ?? recommendation.targetURL.prettyPath)"
+            targetLine = "Target: \(recommendation.detailText ?? recommendation.targetURL.prettyPath)"
         }
 
         activeAlert = AppAlert(
             kind: .confirmation(
                 title: recommendation.title,
-                message: "\(recommendation.summary)\n\n\(targetLine)\nGeschaetzter Effekt: \(ByteCountFormatter.storageString(recommendation.estimatedBytes))\nRisiko: \(recommendation.risk.note)",
+                message: "\(recommendation.summary)\n\n\(targetLine)\nEstimated impact: \(ByteCountFormatter.storageString(recommendation.estimatedBytes))\nRisk: \(recommendation.risk.note)",
                 action: .cleanup(recommendation)
             )
         )
@@ -143,8 +143,8 @@ final class StorageDashboardViewModel: ObservableObject {
     func requestTrash(_ item: StorageNode) {
         activeAlert = AppAlert(
             kind: .confirmation(
-                title: "In den Papierkorb verschieben?",
-                message: "\(item.name) wird in deinen Papierkorb verschoben.",
+                title: "Move To Trash?",
+                message: "\(item.name) will be moved to your Trash.",
                 action: .trash(item)
             )
         )
@@ -162,8 +162,8 @@ final class StorageDashboardViewModel: ObservableObject {
                     persistCurrentSnapshot()
                     activeAlert = AppAlert(
                         kind: .info(
-                            title: "Bereinigung abgeschlossen",
-                            message: "\(recommendation.title) wurde ausgefuehrt."
+                            title: "Cleanup Complete",
+                            message: "\(recommendation.title) finished successfully."
                         )
                     )
                 case let .trash(item):
@@ -172,8 +172,8 @@ final class StorageDashboardViewModel: ObservableObject {
                     persistCurrentSnapshot()
                     activeAlert = AppAlert(
                         kind: .info(
-                            title: "Verschoben",
-                            message: "\(item.name) liegt jetzt im Papierkorb."
+                            title: "Moved To Trash",
+                            message: "\(item.name) is now in the Trash."
                         )
                     )
                 }
@@ -183,7 +183,7 @@ final class StorageDashboardViewModel: ObservableObject {
                 startScan(force: true)
                 activeAlert = AppAlert(
                     kind: .info(
-                        title: "Aktion nicht abgeschlossen",
+                        title: "Action Failed",
                         message: error.localizedDescription
                     )
                 )

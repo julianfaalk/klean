@@ -31,22 +31,22 @@ enum CleanupRisk: String, Codable, Hashable, Sendable {
     var label: String {
         switch self {
         case .low:
-            return "Sicher"
+            return "Safe"
         case .medium:
-            return "Pruefen"
+            return "Review"
         case .high:
-            return "Vorsicht"
+            return "Caution"
         }
     }
 
     var note: String {
         switch self {
         case .low:
-            return "In der Regel unkompliziert rueckgaengig oder neu erzeugbar."
+            return "Usually safe to remove because the data can be regenerated or restored without much friction."
         case .medium:
-            return "Kann Entwicklungsdaten oder persoenliche Arbeitsflaechen betreffen."
+            return "May affect development data or working sets that you still care about."
         case .high:
-            return "Kann dauerhaft wichtige Daten entfernen."
+            return "May permanently remove important data."
         }
     }
 }
@@ -202,7 +202,7 @@ struct ScanProgress: Codable, Sendable {
             return currentTargetTitle
         }
 
-        return "\(min(completedTargets, totalTargets))/\(totalTargets) geladen • \(currentTargetTitle)"
+        return "\(min(completedTargets, totalTargets))/\(totalTargets) loaded • \(currentTargetTitle)"
     }
 }
 
@@ -215,13 +215,13 @@ enum ScanState {
     var statusText: String {
         switch self {
         case .idle:
-            return "Bereit"
+            return "Ready"
         case let .scanning(progress):
             return progress.statusSummary
         case let .ready(date):
-            return "Zuletzt aktualisiert: \(date.formatted(date: .abbreviated, time: .shortened))"
+            return "Last updated: \(date.formatted(date: .abbreviated, time: .shortened))"
         case let .failed(message):
-            return "Scan fehlgeschlagen: \(message)"
+            return "Scan failed: \(message)"
         }
     }
 }
@@ -247,70 +247,70 @@ enum DefaultScanTargets {
     static func make(home: URL) -> [ScanTargetDefinition] {
         [
             .init(
-                title: "Programme",
-                subtitle: "Installierte Apps im Systemordner",
+                title: "Applications",
+                subtitle: "Installed apps in the main Applications folder",
                 systemImage: "square.stack.3d.up.fill",
                 url: URL(fileURLWithPath: "/Applications", isDirectory: true),
                 cleanupDescriptor: nil
             ),
             .init(
                 title: "Downloads",
-                subtitle: "Was oft unbemerkt viel Speicher zieht",
+                subtitle: "The folder that quietly grows over time",
                 systemImage: "arrow.down.circle.fill",
                 url: home.appending(path: "Downloads", directoryHint: .isDirectory),
                 cleanupDescriptor: nil
             ),
             .init(
                 title: "Desktop",
-                subtitle: "Schnell erreichbar, schnell ueberfuellt",
+                subtitle: "Easy to use, easy to overfill",
                 systemImage: "macwindow.on.rectangle",
                 url: home.appending(path: "Desktop", directoryHint: .isDirectory),
                 cleanupDescriptor: nil
             ),
             .init(
-                title: "Dokumente",
-                subtitle: "Projekte, Exporte und grosse Archive",
+                title: "Documents",
+                subtitle: "Projects, exports, and large archives",
                 systemImage: "doc.text.fill",
                 url: home.appending(path: "Documents", directoryHint: .isDirectory),
                 cleanupDescriptor: nil
             ),
             .init(
-                title: "Bilder",
-                subtitle: "Fotos, Libraries und Medienpakete",
+                title: "Pictures",
+                subtitle: "Photos, libraries, and media bundles",
                 systemImage: "photo.stack.fill",
                 url: home.appending(path: "Pictures", directoryHint: .isDirectory),
                 cleanupDescriptor: nil
             ),
             .init(
-                title: "Filme",
-                subtitle: "Video- und Screenrecording-Daten",
+                title: "Movies",
+                subtitle: "Video files and screen recordings",
                 systemImage: "film.stack.fill",
                 url: home.appending(path: "Movies", directoryHint: .isDirectory),
                 cleanupDescriptor: nil
             ),
             .init(
-                title: "Musik",
-                subtitle: "Audio, Samples und Mediatheken",
+                title: "Music",
+                subtitle: "Audio files, samples, and media libraries",
                 systemImage: "music.note.house.fill",
                 url: home.appending(path: "Music", directoryHint: .isDirectory),
                 cleanupDescriptor: nil
             ),
             .init(
                 title: "iCloud Drive",
-                subtitle: "Synchronisierte Inhalte im Home-Bereich",
+                subtitle: "Synced files from your iCloud Drive home area",
                 systemImage: "icloud.fill",
                 url: home.appending(path: "Library/Mobile Documents/com~apple~CloudDocs", directoryHint: .isDirectory),
                 cleanupDescriptor: nil
             ),
             .init(
-                title: "Papierkorb",
-                subtitle: "Bereits entfernt, aber noch nicht freigegeben",
+                title: "Trash",
+                subtitle: "Already removed, but not yet reclaimed",
                 systemImage: "trash.fill",
                 url: home.appending(path: ".Trash", directoryHint: .isDirectory),
                 cleanupDescriptor: .init(
-                    title: "Papierkorb leeren",
-                    summary: "Entfernt den Inhalt deines Benutzer-Papierkorbs dauerhaft.",
-                    buttonLabel: "Papierkorb leeren",
+                    title: "Empty Trash",
+                    summary: "Permanently deletes the contents of your user Trash.",
+                    buttonLabel: "Empty Trash",
                     strategy: .deleteContents,
                     risk: .medium,
                     scope: .general
@@ -318,34 +318,34 @@ enum DefaultScanTargets {
             ),
             .init(
                 title: "App Support",
-                subtitle: "Datenbanken, Downloads und lokale App-Daten",
+                subtitle: "Databases, downloads, and local app state",
                 systemImage: "externaldrive.fill.badge.person.crop",
                 url: home.appending(path: "Library/Application Support", directoryHint: .isDirectory),
                 cleanupDescriptor: nil
             ),
             .init(
-                title: "App Container",
-                subtitle: "Sandbox-Daten von Mac-Apps",
+                title: "App Containers",
+                subtitle: "Sandbox data created by Mac apps",
                 systemImage: "shippingbox.fill",
                 url: home.appending(path: "Library/Containers", directoryHint: .isDirectory),
                 cleanupDescriptor: nil
             ),
             .init(
-                title: "Messages Anhaenge",
-                subtitle: "Bilder, Videos und Dateien aus Nachrichten",
+                title: "Messages Attachments",
+                subtitle: "Images, videos, and files from Messages",
                 systemImage: "message.fill",
                 url: home.appending(path: "Library/Messages/Attachments", directoryHint: .isDirectory),
                 cleanupDescriptor: nil
             ),
             .init(
                 title: "Caches",
-                subtitle: "Temporäre Daten, oft gut entsorgbar",
+                subtitle: "Temporary data that is often safe to clear",
                 systemImage: "sparkles.rectangle.stack.fill",
                 url: home.appending(path: "Library/Caches", directoryHint: .isDirectory),
                 cleanupDescriptor: .init(
-                    title: "Caches aufraeumen",
-                    summary: "Verschiebt den Inhalt deiner Benutzer-Caches in den Papierkorb.",
-                    buttonLabel: "Caches in Papierkorb",
+                    title: "Clear User Caches",
+                    summary: "Moves the contents of your user caches to the Trash.",
+                    buttonLabel: "Move Caches to Trash",
                     strategy: .trashContents,
                     risk: .low,
                     scope: .general
@@ -353,13 +353,13 @@ enum DefaultScanTargets {
             ),
             .init(
                 title: "Xcode DerivedData",
-                subtitle: "Build-Artefakte und Indexdaten",
+                subtitle: "Build artifacts, indexes, and temporary derived output",
                 systemImage: "hammer.fill",
                 url: home.appending(path: "Library/Developer/Xcode/DerivedData", directoryHint: .isDirectory),
                 cleanupDescriptor: .init(
-                    title: "DerivedData bereinigen",
-                    summary: "Verschiebt Xcode-Builddaten in den Papierkorb. Xcode erzeugt sie bei Bedarf neu.",
-                    buttonLabel: "DerivedData cleanen",
+                    title: "Clear DerivedData",
+                    summary: "Moves Xcode build data to the Trash. Xcode will regenerate it when needed.",
+                    buttonLabel: "Clear DerivedData",
                     strategy: .trashContents,
                     risk: .low,
                     scope: .developer
@@ -367,13 +367,13 @@ enum DefaultScanTargets {
             ),
             .init(
                 title: "Xcode Archives",
-                subtitle: "Archivierte Builds und Exporte",
+                subtitle: "Archived builds and exported app bundles",
                 systemImage: "archivebox.fill",
                 url: home.appending(path: "Library/Developer/Xcode/Archives", directoryHint: .isDirectory),
                 cleanupDescriptor: .init(
-                    title: "Xcode Archives pruefen",
-                    summary: "Verschiebt Xcode-Archive in den Papierkorb. Nur cleanen, wenn du sie wirklich nicht mehr brauchst.",
-                    buttonLabel: "Archives in Papierkorb",
+                    title: "Review Xcode Archives",
+                    summary: "Moves Xcode archives to the Trash. Only clear them if you no longer need them.",
+                    buttonLabel: "Move Archives to Trash",
                     strategy: .trashContents,
                     risk: .medium,
                     scope: .developer
@@ -381,7 +381,7 @@ enum DefaultScanTargets {
             ),
             .init(
                 title: "iOS Simulator",
-                subtitle: "Simulator-Images, Geräte und App-Daten",
+                subtitle: "Simulator images, devices, and app data",
                 systemImage: "iphone.gen3",
                 url: home.appending(path: "Library/Developer/CoreSimulator", directoryHint: .isDirectory),
                 cleanupDescriptor: nil

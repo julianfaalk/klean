@@ -284,9 +284,9 @@ struct StorageScanner: Sendable {
 
         appendDirectoryRoutine(
             to: &routines,
-            title: "SwiftPM Cache bereinigen",
-            summary: "Entfernt den lokalen Swift Package Manager Download-Cache. Pakete werden bei Bedarf erneut geladen.",
-            buttonLabel: "SwiftPM Cache cleanen",
+            title: "Clear SwiftPM Cache",
+            summary: "Removes the local Swift Package Manager download cache. Packages will be downloaded again when needed.",
+            buttonLabel: "Clear SwiftPM Cache",
             targetURL: home.appending(path: "Library/Caches/org.swift.swiftpm", directoryHint: .isDirectory),
             systemImage: "shippingbox.fill",
             risk: .low,
@@ -295,9 +295,9 @@ struct StorageScanner: Sendable {
 
         appendDirectoryRoutine(
             to: &routines,
-            title: "Flutter Pub Cache bereinigen",
-            summary: "Raeumt den globalen Flutter- und Dart-Paketcache auf. Abhaengigkeiten werden spaeter erneut geladen.",
-            buttonLabel: "Pub Cache cleanen",
+            title: "Clear Flutter Pub Cache",
+            summary: "Clears the global Flutter and Dart package cache. Dependencies will be downloaded again later.",
+            buttonLabel: "Clear Pub Cache",
             targetURL: home.appending(path: ".pub-cache", directoryHint: .isDirectory),
             systemImage: "square.stack.3d.up.fill",
             risk: .low,
@@ -306,9 +306,9 @@ struct StorageScanner: Sendable {
 
         appendDirectoryRoutine(
             to: &routines,
-            title: "CoreSimulator Caches bereinigen",
-            summary: "Entfernt temporaere CoreSimulator-Caches, ohne Simulator-Devices und App-Daten direkt anzufassen.",
-            buttonLabel: "Simulator Caches cleanen",
+            title: "Clear CoreSimulator Caches",
+            summary: "Removes temporary CoreSimulator caches without directly touching simulator devices or app data.",
+            buttonLabel: "Clear Simulator Caches",
             targetURL: home.appending(path: "Library/Developer/CoreSimulator/Caches", directoryHint: .isDirectory),
             systemImage: "iphone.gen3",
             risk: .low,
@@ -413,9 +413,9 @@ struct StorageScanner: Sendable {
         let dockerRoot = home.appending(path: "Library/Containers/com.docker.docker", directoryHint: .isDirectory)
 
         return CleanupRecommendation(
-            title: "Docker Build Cache bereinigen",
-            summary: "Fuehrt `docker buildx prune --all --force` aus und entfernt nur den Build-Cache. Images, Volumes und Container bleiben unberuehrt.",
-            buttonLabel: "Docker Cache cleanen",
+            title: "Clear Docker Build Cache",
+            summary: "Runs `docker buildx prune --all --force` and removes only build cache. Images, volumes, and containers stay untouched.",
+            buttonLabel: "Clear Docker Cache",
             targetURL: dockerRoot,
             strategy: .runCommand,
             risk: .medium,
