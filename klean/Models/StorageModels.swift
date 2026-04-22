@@ -15,6 +15,12 @@ enum CleanupStrategy: String, Codable, Hashable, Sendable {
     case trashContents
     case deleteContents
     case moveItemToTrash
+    case runCommand
+}
+
+enum CleanupRecommendationScope: String, Codable, Hashable, Sendable {
+    case general
+    case developer
 }
 
 enum CleanupRisk: String, Codable, Hashable, Sendable {
@@ -53,10 +59,48 @@ struct CleanupRecommendation: Codable, Identifiable, Hashable, Sendable {
     let strategy: CleanupStrategy
     let risk: CleanupRisk
     let estimatedBytes: Int64
+    let systemImage: String
+    let scope: CleanupRecommendationScope
+    let detailText: String?
+    let command: CleanupCommand?
+
+    init(
+        title: String,
+        summary: String,
+        buttonLabel: String,
+        targetURL: URL,
+        strategy: CleanupStrategy,
+        risk: CleanupRisk,
+        estimatedBytes: Int64,
+        systemImage: String = "sparkles",
+        scope: CleanupRecommendationScope = .general,
+        detailText: String? = nil,
+        command: CleanupCommand? = nil
+    ) {
+        self.title = title
+        self.summary = summary
+        self.buttonLabel = buttonLabel
+        self.targetURL = targetURL
+        self.strategy = strategy
+        self.risk = risk
+        self.estimatedBytes = estimatedBytes
+        self.systemImage = systemImage
+        self.scope = scope
+        self.detailText = detailText
+        self.command = command
+    }
 
     var id: String {
-        "\(strategy.rawValue)|\(targetURL.path())"
+        if let command {
+            return "\(strategy.rawValue)|\(command.executable)|\(command.arguments.joined(separator: " "))"
+        }
+        return "\(strategy.rawValue)|\(targetURL.path())"
     }
+}
+
+struct CleanupCommand: Codable, Hashable, Sendable {
+    let executable: String
+    let arguments: [String]
 }
 
 struct StorageNode: Codable, Identifiable, Hashable, Sendable {
@@ -103,6 +147,7 @@ struct StorageSnapshot: Codable, Sendable {
     let categories: [StorageCategory]
     let largestFiles: [StorageNode]
     let inaccessiblePaths: [URL]
+    let developerRoutines: [CleanupRecommendation]
 
     var scannedBytes: Int64 {
         categories.reduce(into: 0) { partialResult, category in
@@ -117,6 +162,23 @@ struct StorageSnapshot: Codable, Sendable {
     var cleanupRecommendations: [CleanupRecommendation] {
         categories
             .compactMap(\.cleanupRecommendation)
+            .sorted { $0.estimatedBytes > $1.estimatedBytes }
+    }
+
+    var generalCleanupRecommendations: [CleanupRecommendation] {
+        cleanupRecommendations
+            .filter { $0.scope == .general }
+            .sorted { $0.estimatedBytes > $1.estimatedBytes }
+    }
+
+    var developerCleanupRecommendations: [CleanupRecommendation] {
+        let categoryDeveloperRoutines = cleanupRecommendations.filter { $0.scope == .developer }
+        return (categoryDeveloperRoutines + developerRoutines)
+            .sorted { $0.estimatedBytes > $1.estimatedBytes }
+    }
+
+    var allCleanupRecommendations: [CleanupRecommendation] {
+        (generalCleanupRecommendations + developerCleanupRecommendations)
             .sorted { $0.estimatedBytes > $1.estimatedBytes }
     }
 
@@ -178,6 +240,7 @@ struct CleanupDescriptor: Sendable {
     let buttonLabel: String
     let strategy: CleanupStrategy
     let risk: CleanupRisk
+    let scope: CleanupRecommendationScope
 }
 
 enum DefaultScanTargets {
@@ -249,7 +312,8 @@ enum DefaultScanTargets {
                     summary: "Entfernt den Inhalt deines Benutzer-Papierkorbs dauerhaft.",
                     buttonLabel: "Papierkorb leeren",
                     strategy: .deleteContents,
-                    risk: .medium
+                    risk: .medium,
+                    scope: .general
                 )
             ),
             .init(
@@ -283,7 +347,8 @@ enum DefaultScanTargets {
                     summary: "Verschiebt den Inhalt deiner Benutzer-Caches in den Papierkorb.",
                     buttonLabel: "Caches in Papierkorb",
                     strategy: .trashContents,
-                    risk: .low
+                    risk: .low,
+                    scope: .general
                 )
             ),
             .init(
@@ -296,7 +361,8 @@ enum DefaultScanTargets {
                     summary: "Verschiebt Xcode-Builddaten in den Papierkorb. Xcode erzeugt sie bei Bedarf neu.",
                     buttonLabel: "DerivedData cleanen",
                     strategy: .trashContents,
-                    risk: .low
+                    risk: .low,
+                    scope: .developer
                 )
             ),
             .init(
@@ -309,7 +375,8 @@ enum DefaultScanTargets {
                     summary: "Verschiebt Xcode-Archive in den Papierkorb. Nur cleanen, wenn du sie wirklich nicht mehr brauchst.",
                     buttonLabel: "Archives in Papierkorb",
                     strategy: .trashContents,
-                    risk: .medium
+                    risk: .medium,
+                    scope: .developer
                 )
             ),
             .init(

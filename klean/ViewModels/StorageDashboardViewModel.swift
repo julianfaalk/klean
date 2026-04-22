@@ -123,10 +123,18 @@ final class StorageDashboardViewModel: ObservableObject {
     }
 
     func requestCleanup(_ recommendation: CleanupRecommendation) {
+        let targetLine: String
+        switch recommendation.strategy {
+        case .runCommand:
+            targetLine = recommendation.detailText.map { "Routine: \($0)" } ?? "Routine: Command"
+        default:
+            targetLine = "Ziel: \(recommendation.detailText ?? recommendation.targetURL.prettyPath)"
+        }
+
         activeAlert = AppAlert(
             kind: .confirmation(
                 title: recommendation.title,
-                message: "\(recommendation.summary)\n\nGeschaetzter Effekt: \(ByteCountFormatter.storageString(recommendation.estimatedBytes))\nRisiko: \(recommendation.risk.note)",
+                message: "\(recommendation.summary)\n\n\(targetLine)\nGeschaetzter Effekt: \(ByteCountFormatter.storageString(recommendation.estimatedBytes))\nRisiko: \(recommendation.risk.note)",
                 action: .cleanup(recommendation)
             )
         )
@@ -260,14 +268,38 @@ private extension StorageSnapshot {
             scannedAt: refreshedSnapshot.scannedAt,
             categories: mergedCategories,
             largestFiles: mergedLargestFiles,
-            inaccessiblePaths: mergedInaccessiblePaths
+            inaccessiblePaths: mergedInaccessiblePaths,
+            developerRoutines: refreshedSnapshot.developerRoutines
         )
     }
 
     func applyingCleanup(_ recommendation: CleanupRecommendation) -> StorageSnapshot {
         let targetPath = recommendation.targetURL.standardizedFileURL.path
+        let updatedDeveloperRoutines = developerRoutines.filter { $0.id != recommendation.id }
         guard let targetIndex = categories.firstIndex(where: { $0.url.standardizedFileURL.path == targetPath }) else {
-            return self
+            if let sourceIndex = sourceCategoryIndex(for: recommendation.targetURL) {
+                var updatedCategories = categories
+                updatedCategories[sourceIndex] = updatedCategories[sourceIndex]
+                    .subtracting(bytes: recommendation.estimatedBytes)
+
+                return StorageSnapshot(
+                    volume: recommendation.strategy == .deleteContents ? volume.adjustingAvailableBytes(by: recommendation.estimatedBytes) : volume,
+                    scannedAt: Date(),
+                    categories: updatedCategories,
+                    largestFiles: largestFiles.filter { !$0.url.path.hasPrefix(targetPath) },
+                    inaccessiblePaths: inaccessiblePaths,
+                    developerRoutines: updatedDeveloperRoutines
+                )
+            }
+
+            return StorageSnapshot(
+                volume: volume,
+                scannedAt: Date(),
+                categories: categories,
+                largestFiles: largestFiles,
+                inaccessiblePaths: inaccessiblePaths,
+                developerRoutines: updatedDeveloperRoutines
+            )
         }
 
         var updatedCategories = categories
@@ -289,7 +321,8 @@ private extension StorageSnapshot {
                 scannedAt: Date(),
                 categories: updatedCategories,
                 largestFiles: largestFiles.filter { !$0.url.path.hasPrefix(targetPath) },
-                inaccessiblePaths: inaccessiblePaths
+                inaccessiblePaths: inaccessiblePaths,
+                developerRoutines: updatedDeveloperRoutines
             )
 
         case .deleteContents:
@@ -298,11 +331,21 @@ private extension StorageSnapshot {
                 scannedAt: Date(),
                 categories: updatedCategories,
                 largestFiles: largestFiles.filter { !$0.url.path.hasPrefix(targetPath) },
-                inaccessiblePaths: inaccessiblePaths
+                inaccessiblePaths: inaccessiblePaths,
+                developerRoutines: updatedDeveloperRoutines
             )
 
         case .moveItemToTrash:
             return self
+        case .runCommand:
+            return StorageSnapshot(
+                volume: volume,
+                scannedAt: Date(),
+                categories: updatedCategories,
+                largestFiles: largestFiles.filter { !$0.url.path.hasPrefix(targetPath) },
+                inaccessiblePaths: inaccessiblePaths,
+                developerRoutines: updatedDeveloperRoutines
+            )
         }
     }
 
@@ -324,7 +367,8 @@ private extension StorageSnapshot {
             scannedAt: Date(),
             categories: updatedCategories,
             largestFiles: largestFiles.filter { $0.id != item.id },
-            inaccessiblePaths: inaccessiblePaths
+            inaccessiblePaths: inaccessiblePaths,
+            developerRoutines: developerRoutines
         )
     }
 
@@ -392,6 +436,31 @@ private extension StorageCategory {
             cleanupRecommendation: cleanupRecommendation?.withEstimatedBytes(updatedBytes)
         )
     }
+
+    func subtracting(bytes: Int64) -> StorageCategory {
+        let updatedBytes = max(totalBytes - bytes, 0)
+        let updatedChildren = topChildren.map { child in
+            StorageNode(
+                url: child.url,
+                name: child.name,
+                bytes: child.bytes,
+                itemCount: child.itemCount,
+                kind: child.kind,
+                modifiedAt: child.modifiedAt
+            )
+        }
+
+        return StorageCategory(
+            title: title,
+            subtitle: subtitle,
+            systemImage: systemImage,
+            url: url,
+            totalBytes: updatedBytes,
+            itemCount: itemCount,
+            topChildren: updatedChildren,
+            cleanupRecommendation: cleanupRecommendation?.withEstimatedBytes(updatedBytes)
+        )
+    }
 }
 
 private extension CleanupRecommendation {
@@ -407,7 +476,11 @@ private extension CleanupRecommendation {
             targetURL: targetURL,
             strategy: strategy,
             risk: risk,
-            estimatedBytes: updatedBytes
+            estimatedBytes: updatedBytes,
+            systemImage: systemImage,
+            scope: scope,
+            detailText: detailText,
+            command: command
         )
     }
 }
@@ -423,5 +496,12 @@ private extension VolumeStats {
             importantAvailableBytes: min(max(importantAvailableBytes + importantDelta, 0), totalBytes),
             opportunisticAvailableBytes: min(max(opportunisticAvailableBytes + importantDelta, 0), totalBytes)
         )
+    }
+}
+
+private extension URL {
+    var prettyPath: String {
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+        return path.replacingOccurrences(of: homePath, with: "~")
     }
 }

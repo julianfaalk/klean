@@ -30,6 +30,14 @@ struct CleanupManager: Sendable {
             try deleteContents(of: recommendation.targetURL)
         case .moveItemToTrash:
             try moveItemToTrash(recommendation.targetURL)
+        case .runCommand:
+            guard let command = recommendation.command else {
+                throw CleanupError.commandFailed("Der Cleanup-Command fehlt.")
+            }
+            try runCommand(
+                executable: command.executable,
+                arguments: command.arguments
+            )
         }
     }
 

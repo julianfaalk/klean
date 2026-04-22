@@ -98,9 +98,16 @@ struct OverviewDashboard: View {
                 if let snapshot = viewModel.snapshot {
                     OverviewInsightsRow(snapshot: snapshot)
 
+                    if !snapshot.developerCleanupRecommendations.isEmpty {
+                        DeveloperRoutinesCard(
+                            viewModel: viewModel,
+                            recommendations: snapshot.developerCleanupRecommendations
+                        )
+                    }
+
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 18) {
                         StorageSummaryCard(snapshot: snapshot)
-                        QuickActionsCard(viewModel: viewModel, recommendations: snapshot.cleanupRecommendations)
+                        QuickActionsCard(viewModel: viewModel, recommendations: snapshot.generalCleanupRecommendations)
                     }
 
                     VStack(alignment: .leading, spacing: 16) {
@@ -347,7 +354,7 @@ private struct OverviewInsightsRow: View {
             InsightCard(
                 label: "Direkt bereinigbar",
                 value: ByteCountFormatter.storageString(snapshot.reclaimableBytes),
-                note: "\(snapshot.cleanupRecommendations.count.formatted()) sinnvolle Automationen erkannt",
+                note: "\(snapshot.allCleanupRecommendations.count.formatted()) sinnvolle Routinen erkannt",
                 tint: KleanTheme.highlight
             )
             InsightCard(
@@ -526,6 +533,32 @@ private struct QuickActionsCard: View {
                                 execute: { viewModel.requestCleanup(recommendation) }
                             )
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct DeveloperRoutinesCard: View {
+    @ObservedObject var viewModel: StorageDashboardViewModel
+    let recommendations: [CleanupRecommendation]
+
+    var body: some View {
+        CardShell {
+            VStack(alignment: .leading, spacing: 18) {
+                SectionHeadline(
+                    eyebrow: "Developer Cleanups",
+                    title: "Routine-Jobs fuer deinen Dev-Mac",
+                    subtitle: "Sichere Kandidaten aus Xcode, SwiftPM, Flutter und Docker, die du direkt aus dem Dashboard ausfuehren kannst."
+                )
+
+                VStack(spacing: 12) {
+                    ForEach(recommendations.prefix(6)) { recommendation in
+                        DeveloperRoutineRow(
+                            recommendation: recommendation,
+                            execute: { viewModel.requestCleanup(recommendation) }
+                        )
                     }
                 }
             }
@@ -859,36 +892,42 @@ private struct HeroStorageArtwork: View {
             VStack(spacing: 18) {
                 ZStack {
                     Circle()
-                        .fill(Color.white.opacity(0.78))
-                        .frame(width: 144, height: 144)
-                        .shadow(color: .black.opacity(0.08), radius: 24, y: 12)
+                        .fill(Color.white.opacity(0.62))
+                        .frame(width: 180, height: 180)
+                        .blur(radius: 8)
 
-                    Circle()
-                        .trim(from: 0.06, to: min(0.08 + usageFraction * 0.92, 0.98))
-                        .stroke(
-                            AngularGradient(
-                                colors: [KleanTheme.accent, KleanTheme.highlight, KleanTheme.info, KleanTheme.accent],
-                                center: .center
-                            ),
-                            style: StrokeStyle(lineWidth: 20, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-110))
-                        .frame(width: 120, height: 120)
+                    Image("BrandMark")
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .frame(width: 154, height: 154)
+                        .shadow(color: .black.opacity(0.14), radius: 24, y: 14)
 
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [KleanTheme.hazeGreen.opacity(0.8), KleanTheme.hazeGold.opacity(0.35)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                    VStack {
+                        HStack {
+                            Spacer()
+                            StatusCapsule(
+                                text: snapshot.map { ByteCountFormatter.storageString($0.reclaimableBytes) } ?? "...",
+                                tint: KleanTheme.highlight
                             )
-                        )
-                        .frame(width: 52, height: 52)
+                        }
+                        Spacer()
+                    }
+                    .padding(.top, 8)
+                    .padding(.horizontal, 12)
 
-                    Image(systemName: "internaldrive.fill")
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.92))
-                        .offset(y: 68)
+                    VStack {
+                        Spacer()
+                        HStack {
+                            StatusCapsule(
+                                text: "\(Int((usageFraction * 100).rounded())) % belegt",
+                                tint: KleanTheme.accent
+                            )
+                            Spacer()
+                        }
+                    }
+                    .padding(.bottom, 8)
+                    .padding(.horizontal, 12)
                 }
 
                 VStack(spacing: 6) {
@@ -1016,6 +1055,68 @@ private struct QuickActionRow: View {
         )
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(0.60), lineWidth: 1)
+        }
+    }
+}
+
+private struct DeveloperRoutineRow: View {
+    let recommendation: CleanupRecommendation
+    let execute: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.white.opacity(0.80))
+                    .frame(width: 50, height: 50)
+
+                Image(systemName: recommendation.systemImage)
+                    .font(.system(size: 19, weight: .semibold))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(KleanTheme.accent, KleanTheme.highlight)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(recommendation.title)
+                        .font(.headline)
+                        .foregroundStyle(KleanTheme.ink)
+
+                    RiskBadge(risk: recommendation.risk)
+
+                    Spacer()
+
+                    Text(ByteCountFormatter.storageString(recommendation.estimatedBytes))
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(KleanTheme.ink)
+                }
+
+                Text(recommendation.summary)
+                    .foregroundStyle(KleanTheme.mutedInk)
+
+                HStack(spacing: 10) {
+                    if let detailText = recommendation.detailText {
+                        Label(detailText, systemImage: recommendation.strategy == .runCommand ? "terminal.fill" : "folder.fill")
+                            .font(.caption)
+                            .foregroundStyle(KleanTheme.quietInk)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    Button(recommendation.buttonLabel, action: execute)
+                        .buttonStyle(KleanPrimaryActionStyle())
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(0.54))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(Color.white.opacity(0.60), lineWidth: 1)
         }
     }
@@ -1230,7 +1331,7 @@ private extension CleanupRisk {
 
 private extension StorageSnapshot {
     var reclaimableBytes: Int64 {
-        cleanupRecommendations.reduce(into: 0) { partialResult, recommendation in
+        allCleanupRecommendations.reduce(into: 0) { partialResult, recommendation in
             partialResult += recommendation.estimatedBytes
         }
     }

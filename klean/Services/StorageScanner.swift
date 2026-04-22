@@ -65,12 +65,14 @@ struct StorageScanner: Sendable {
                 inaccessiblePaths.insert(target.url.path)
             }
 
-             let update = ScanUpdate(
+            let developerRoutines = makeDeveloperRoutines(home: home, categories: categories)
+            let update = ScanUpdate(
                 snapshot: makeSnapshot(
                     volume: volume,
                     categories: categories,
                     largestFiles: largestFiles,
-                    inaccessiblePaths: inaccessiblePaths
+                    inaccessiblePaths: inaccessiblePaths,
+                    developerRoutines: developerRoutines
                 ),
                 progress: .init(
                     currentTargetTitle: target.title,
@@ -81,11 +83,13 @@ struct StorageScanner: Sendable {
             await partialUpdate(update)
         }
 
+        let developerRoutines = makeDeveloperRoutines(home: home, categories: categories)
         return makeSnapshot(
             volume: volume,
             categories: categories,
             largestFiles: largestFiles,
-            inaccessiblePaths: inaccessiblePaths
+            inaccessiblePaths: inaccessiblePaths,
+            developerRoutines: developerRoutines
         )
     }
 
@@ -173,7 +177,10 @@ struct StorageScanner: Sendable {
                     targetURL: target.url,
                     strategy: descriptor.strategy,
                     risk: descriptor.risk,
-                    estimatedBytes: totalBytes
+                    estimatedBytes: totalBytes,
+                    systemImage: target.systemImage,
+                    scope: descriptor.scope,
+                    detailText: target.url.prettyPath
                 )
                 : nil
         }
@@ -272,6 +279,246 @@ struct StorageScanner: Sendable {
         )
     }
 
+    private func makeDeveloperRoutines(home: URL, categories: [StorageCategory]) -> [CleanupRecommendation] {
+        var routines: [CleanupRecommendation] = []
+
+        appendDirectoryRoutine(
+            to: &routines,
+            title: "SwiftPM Cache bereinigen",
+            summary: "Entfernt den lokalen Swift Package Manager Download-Cache. Pakete werden bei Bedarf erneut geladen.",
+            buttonLabel: "SwiftPM Cache cleanen",
+            targetURL: home.appending(path: "Library/Caches/org.swift.swiftpm", directoryHint: .isDirectory),
+            systemImage: "shippingbox.fill",
+            risk: .low,
+            categories: categories
+        )
+
+        appendDirectoryRoutine(
+            to: &routines,
+            title: "Flutter Pub Cache bereinigen",
+            summary: "Raeumt den globalen Flutter- und Dart-Paketcache auf. Abhaengigkeiten werden spaeter erneut geladen.",
+            buttonLabel: "Pub Cache cleanen",
+            targetURL: home.appending(path: ".pub-cache", directoryHint: .isDirectory),
+            systemImage: "square.stack.3d.up.fill",
+            risk: .low,
+            categories: categories
+        )
+
+        appendDirectoryRoutine(
+            to: &routines,
+            title: "CoreSimulator Caches bereinigen",
+            summary: "Entfernt temporaere CoreSimulator-Caches, ohne Simulator-Devices und App-Daten direkt anzufassen.",
+            buttonLabel: "Simulator Caches cleanen",
+            targetURL: home.appending(path: "Library/Developer/CoreSimulator/Caches", directoryHint: .isDirectory),
+            systemImage: "iphone.gen3",
+            risk: .low,
+            categories: categories
+        )
+
+        if let dockerRoutine = makeDockerBuildCacheRoutine(home: home) {
+            routines.append(dockerRoutine)
+        }
+
+        return routines.sorted { $0.estimatedBytes > $1.estimatedBytes }
+    }
+
+    private func appendDirectoryRoutine(
+        to routines: inout [CleanupRecommendation],
+        title: String,
+        summary: String,
+        buttonLabel: String,
+        targetURL: URL,
+        systemImage: String,
+        risk: CleanupRisk,
+        categories: [StorageCategory]
+    ) {
+        guard FileManager.default.fileExists(atPath: targetURL.path) else {
+            return
+        }
+
+        let estimatedBytes = estimatedBytes(for: targetURL, categories: categories)
+        guard estimatedBytes > 0 else {
+            return
+        }
+
+        routines.append(
+            CleanupRecommendation(
+                title: title,
+                summary: summary,
+                buttonLabel: buttonLabel,
+                targetURL: targetURL,
+                strategy: .trashContents,
+                risk: risk,
+                estimatedBytes: estimatedBytes,
+                systemImage: systemImage,
+                scope: .developer,
+                detailText: targetURL.prettyPath
+            )
+        )
+    }
+
+    private func estimatedBytes(for targetURL: URL, categories: [StorageCategory]) -> Int64 {
+        if let matchingCategory = categories.first(where: { $0.url.standardizedFileURL.path == targetURL.standardizedFileURL.path }) {
+            return matchingCategory.totalBytes
+        }
+
+        return directorySize(at: targetURL)
+    }
+
+    private func directorySize(at rootURL: URL) -> Int64 {
+        guard let enumerator = FileManager.default.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: Array(resourceKeys),
+            options: [],
+            errorHandler: { _, _ in true }
+        ) else {
+            return 0
+        }
+
+        var totalBytes: Int64 = 0
+        while let item = enumerator.nextObject() as? URL {
+            let values = try? item.resourceValues(forKeys: resourceKeys)
+            if values?.isSymbolicLink == true {
+                enumerator.skipDescendants()
+                continue
+            }
+
+            if values?.isDirectory == true {
+                continue
+            }
+
+            totalBytes += fileAllocatedBytes(from: values)
+        }
+
+        return totalBytes
+    }
+
+    private func makeDockerBuildCacheRoutine(home: URL) -> CleanupRecommendation? {
+        guard let dockerExecutable = resolvedExecutable(named: "docker") else {
+            return nil
+        }
+
+        guard let output = try? runCommand(
+            executable: dockerExecutable,
+            arguments: ["system", "df", "--format", "json"]
+        ) else {
+            return nil
+        }
+
+        let reclaimableBytes = dockerBuildCacheBytes(from: output)
+        guard reclaimableBytes > 0 else {
+            return nil
+        }
+
+        let dockerRoot = home.appending(path: "Library/Containers/com.docker.docker", directoryHint: .isDirectory)
+
+        return CleanupRecommendation(
+            title: "Docker Build Cache bereinigen",
+            summary: "Fuehrt `docker buildx prune --all --force` aus und entfernt nur den Build-Cache. Images, Volumes und Container bleiben unberuehrt.",
+            buttonLabel: "Docker Cache cleanen",
+            targetURL: dockerRoot,
+            strategy: .runCommand,
+            risk: .medium,
+            estimatedBytes: reclaimableBytes,
+            systemImage: "shippingbox.fill",
+            scope: .developer,
+            detailText: "docker buildx prune --all --force",
+            command: CleanupCommand(
+                executable: dockerExecutable,
+                arguments: ["buildx", "prune", "--all", "--force"]
+            )
+        )
+    }
+
+    private func dockerBuildCacheBytes(from output: String) -> Int64 {
+        output
+            .split(whereSeparator: \.isNewline)
+            .compactMap { line -> Int64? in
+                guard let data = line.data(using: .utf8),
+                      let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      (payload["Type"] as? String) == "Build Cache",
+                      let reclaimable = payload["Reclaimable"] as? String else {
+                    return nil
+                }
+                return parseHumanReadableBytes(reclaimable)
+            }
+            .first ?? 0
+    }
+
+    private func parseHumanReadableBytes(_ rawValue: String) -> Int64 {
+        let trimmedValue = rawValue
+            .components(separatedBy: " ")
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? rawValue
+
+        let pattern = #"([0-9]+(?:\.[0-9]+)?)([KMGTP]?B)"#
+        guard let expression = try? NSRegularExpression(pattern: pattern),
+              let match = expression.firstMatch(
+                in: trimmedValue,
+                range: NSRange(trimmedValue.startIndex..., in: trimmedValue)
+              ),
+              let valueRange = Range(match.range(at: 1), in: trimmedValue),
+              let unitRange = Range(match.range(at: 2), in: trimmedValue),
+              let numericValue = Double(trimmedValue[valueRange]) else {
+            return 0
+        }
+
+        let multiplier: Double
+        switch String(trimmedValue[unitRange]) {
+        case "KB":
+            multiplier = 1_024
+        case "MB":
+            multiplier = 1_024 * 1_024
+        case "GB":
+            multiplier = 1_024 * 1_024 * 1_024
+        case "TB":
+            multiplier = 1_024 * 1_024 * 1_024 * 1_024
+        case "PB":
+            multiplier = 1_024 * 1_024 * 1_024 * 1_024 * 1_024
+        default:
+            multiplier = 1
+        }
+
+        return Int64(numericValue * multiplier)
+    }
+
+    private func resolvedExecutable(named name: String) -> String? {
+        let candidates = [
+            "/opt/homebrew/bin/\(name)",
+            "/usr/local/bin/\(name)",
+            "/usr/bin/\(name)"
+        ]
+
+        return candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) })
+    }
+
+    private func runCommand(executable: String, arguments: [String]) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+
+        try process.run()
+        process.waitUntilExit()
+
+        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+
+        guard process.terminationStatus == 0 else {
+            let errorMessage = String(data: errorData, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            throw NSError(domain: "StorageScanner", code: Int(process.terminationStatus), userInfo: [
+                NSLocalizedDescriptionKey: errorMessage?.isEmpty == false ? errorMessage! : "Command failed"
+            ])
+        }
+
+        return String(data: outputData, encoding: .utf8) ?? ""
+    }
+
     private func insertLargestFile(_ candidate: StorageNode, into list: [StorageNode]) -> [StorageNode] {
         var updated = list
         updated.append(candidate)
@@ -295,7 +542,8 @@ struct StorageScanner: Sendable {
         volume: VolumeStats,
         categories: [StorageCategory],
         largestFiles: [StorageNode],
-        inaccessiblePaths: Set<String>
+        inaccessiblePaths: Set<String>,
+        developerRoutines: [CleanupRecommendation]
     ) -> StorageSnapshot {
         let sortedInaccessiblePaths = inaccessiblePaths
             .map { URL(fileURLWithPath: $0, isDirectory: true) }
@@ -306,7 +554,15 @@ struct StorageScanner: Sendable {
             scannedAt: Date(),
             categories: categories.sorted { $0.totalBytes > $1.totalBytes },
             largestFiles: largestFiles.sorted { $0.bytes > $1.bytes },
-            inaccessiblePaths: sortedInaccessiblePaths
+            inaccessiblePaths: sortedInaccessiblePaths,
+            developerRoutines: developerRoutines
         )
+    }
+}
+
+private extension URL {
+    var prettyPath: String {
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+        return path.replacingOccurrences(of: homePath, with: "~")
     }
 }

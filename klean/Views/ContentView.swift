@@ -203,33 +203,27 @@ private struct SidebarAppMark: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.94),
-                            Color(red: 0.83, green: 0.88, blue: 0.82).opacity(0.84)
+                            Color.white.opacity(0.18),
+                            Color.white.opacity(0.04)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
+                .frame(width: 52, height: 52)
+
+            Image("BrandMark")
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
                 .frame(width: 46, height: 46)
-
-            Circle()
-                .trim(from: 0.10, to: 0.86)
-                .stroke(
-                    LinearGradient(
-                        colors: [Color.accentColor, KleanTheme.highlight],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    style: StrokeStyle(lineWidth: 4.5, lineCap: .round)
-                )
-                .frame(width: 24, height: 24)
-                .rotationEffect(.degrees(-110))
-
-            Circle()
-                .fill(Color.accentColor.opacity(0.90))
-                .frame(width: 9, height: 9)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.22), radius: 14, y: 7)
     }
 }
 

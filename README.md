@@ -1,6 +1,16 @@
 # klean
 
-Native macOS storage dashboard and cleanup utility built with SwiftUI.
+<p align="center">
+  <img src="docs/assets/klean-app-icon-master.png" alt="klean app icon" width="144" />
+</p>
+
+<p align="center">
+  Native macOS storage dashboard and cleanup utility for reclaiming space with confidence.
+</p>
+
+<p align="center">
+  Built with SwiftUI for developer machines, storage hotspots, and safe cleanup routines.
+</p>
 
 ![klean dashboard](docs/assets/klean-dashboard-public.png)
 
@@ -11,6 +21,7 @@ Native macOS storage dashboard and cleanup utility built with SwiftUI.
 - Volume overview with analyzed storage, free space, and a transparent `System/Rest` bucket for the parts macOS does not attribute precisely.
 - Hotspot scanning for common storage offenders such as `Documents`, `Downloads`, `Desktop`, `Applications`, `Pictures`, `Movies`, `Music`, `iCloud Drive`, `Caches`, `Xcode DerivedData`, `Xcode Archives`, simulators, and trash.
 - Safe cleanup actions for known areas like user caches, Xcode build data, archives, and trash.
+- Dedicated developer cleanup routines for caches and build artifacts from workflows like Xcode, SwiftPM, Flutter, CoreSimulator, and Docker build cache.
 - Finder integration to reveal files or move items to trash directly from the app.
 - Live feedback after cleanup actions with optimistic UI updates and an immediate rescan.
 - Faster startup through cached snapshots and incremental scan updates while fresh results stream in.
@@ -81,6 +92,7 @@ This repository is focused on a polished first native desktop version:
 
 - strong visual overview
 - practical cleanup workflows
+- developer-first routine cleanup dashboard
 - live state updates
 - cached startup instead of repeated cold scans
 
