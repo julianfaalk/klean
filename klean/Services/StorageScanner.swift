@@ -66,13 +66,15 @@ struct StorageScanner: Sendable {
             }
 
             let developerRoutines = makeDeveloperRoutines(home: home, categories: categories)
+            let reviewRecommendations = makeReviewRecommendations(home: home, categories: categories)
             let update = ScanUpdate(
                 snapshot: makeSnapshot(
                     volume: volume,
                     categories: categories,
                     largestFiles: largestFiles,
                     inaccessiblePaths: inaccessiblePaths,
-                    developerRoutines: developerRoutines
+                    developerRoutines: developerRoutines,
+                    reviewRecommendations: reviewRecommendations
                 ),
                 progress: .init(
                     currentTargetTitle: target.title,
@@ -84,12 +86,14 @@ struct StorageScanner: Sendable {
         }
 
         let developerRoutines = makeDeveloperRoutines(home: home, categories: categories)
+        let reviewRecommendations = makeReviewRecommendations(home: home, categories: categories)
         return makeSnapshot(
             volume: volume,
             categories: categories,
             largestFiles: largestFiles,
             inaccessiblePaths: inaccessiblePaths,
-            developerRoutines: developerRoutines
+            developerRoutines: developerRoutines,
+            reviewRecommendations: reviewRecommendations
         )
     }
 
@@ -322,6 +326,81 @@ struct StorageScanner: Sendable {
         return routines.sorted { $0.estimatedBytes > $1.estimatedBytes }
     }
 
+    private func makeReviewRecommendations(home: URL, categories: [StorageCategory]) -> [CleanupRecommendation] {
+        var recommendations: [CleanupRecommendation] = []
+
+        appendLargestChildReviewRecommendations(
+            to: &recommendations,
+            in: category(named: "Applications", categories: categories),
+            limit: 4,
+            minimumBytes: 2 * 1_024 * 1_024 * 1_024,
+            risk: .medium,
+            scope: .general,
+            buttonLabel: "Move App To Trash",
+            summaryBuilder: { child in
+                "A large installed app bundle. Remove it if you no longer use it and want the space back."
+            }
+        )
+
+        appendLargestChildReviewRecommendations(
+            to: &recommendations,
+            in: category(named: "Downloads", categories: categories),
+            limit: 4,
+            minimumBytes: 1 * 1_024 * 1_024 * 1_024,
+            risk: .medium,
+            scope: .general,
+            buttonLabel: "Move To Trash",
+            summaryBuilder: { _ in
+                "A large item in Downloads. Good candidate if it is an old DMG, ZIP, export, or installer."
+            }
+        )
+
+        appendLargestChildReviewRecommendations(
+            to: &recommendations,
+            in: category(named: "App Support", categories: categories),
+            limit: 4,
+            minimumBytes: 2 * 1_024 * 1_024 * 1_024,
+            risk: .high,
+            scope: .general,
+            buttonLabel: "Move Data To Trash",
+            summaryBuilder: { _ in
+                "Large application support data. Review carefully before removing because app state or local databases may live here."
+            }
+        )
+
+        appendLargestChildReviewRecommendations(
+            to: &recommendations,
+            in: category(named: "App Containers", categories: categories),
+            limit: 3,
+            minimumBytes: 2 * 1_024 * 1_024 * 1_024,
+            risk: .high,
+            scope: .general,
+            buttonLabel: "Move Container To Trash",
+            summaryBuilder: { _ in
+                "Large sandbox container data. Only remove it if you intentionally want to reset or uninstall the related app."
+            }
+        )
+
+        appendDirectoryReviewRoutine(
+            to: &recommendations,
+            title: "Review Simulator Devices",
+            summary: "Moves iOS Simulator device data to the Trash. This can free a lot of space, but it also removes simulator devices, app installs, and simulator state.",
+            buttonLabel: "Clear Simulator Devices",
+            targetURL: home.appending(path: "Library/Developer/CoreSimulator/Devices", directoryHint: .isDirectory),
+            systemImage: "iphone.gen3",
+            risk: .high,
+            scope: .developer,
+            minimumBytes: 1 * 1_024 * 1_024 * 1_024,
+            categories: categories
+        )
+
+        if let dockerImageRoutine = makeDockerUnusedImagesRoutine(home: home) {
+            recommendations.append(dockerImageRoutine)
+        }
+
+        return recommendations.sorted { $0.estimatedBytes > $1.estimatedBytes }
+    }
+
     private func appendDirectoryRoutine(
         to routines: inout [CleanupRecommendation],
         title: String,
@@ -355,6 +434,79 @@ struct StorageScanner: Sendable {
                 detailText: targetURL.prettyPath
             )
         )
+    }
+
+    private func appendDirectoryReviewRoutine(
+        to routines: inout [CleanupRecommendation],
+        title: String,
+        summary: String,
+        buttonLabel: String,
+        targetURL: URL,
+        systemImage: String,
+        risk: CleanupRisk,
+        scope: CleanupRecommendationScope,
+        minimumBytes: Int64,
+        categories: [StorageCategory]
+    ) {
+        guard FileManager.default.fileExists(atPath: targetURL.path) else {
+            return
+        }
+
+        let estimatedBytes = estimatedBytes(for: targetURL, categories: categories)
+        guard estimatedBytes >= minimumBytes else {
+            return
+        }
+
+        routines.append(
+            CleanupRecommendation(
+                title: title,
+                summary: summary,
+                buttonLabel: buttonLabel,
+                targetURL: targetURL,
+                strategy: .trashContents,
+                risk: risk,
+                estimatedBytes: estimatedBytes,
+                systemImage: systemImage,
+                scope: scope,
+                detailText: targetURL.prettyPath
+            )
+        )
+    }
+
+    private func appendLargestChildReviewRecommendations(
+        to routines: inout [CleanupRecommendation],
+        in category: StorageCategory?,
+        limit: Int,
+        minimumBytes: Int64,
+        risk: CleanupRisk,
+        scope: CleanupRecommendationScope,
+        buttonLabel: String,
+        summaryBuilder: (StorageNode) -> String
+    ) {
+        guard let category else {
+            return
+        }
+
+        let candidates = category.topChildren
+            .filter { $0.bytes >= minimumBytes }
+            .prefix(limit)
+
+        for child in candidates {
+            routines.append(
+                CleanupRecommendation(
+                    title: child.name,
+                    summary: summaryBuilder(child),
+                    buttonLabel: buttonLabel,
+                    targetURL: child.url,
+                    strategy: .moveItemToTrash,
+                    risk: risk,
+                    estimatedBytes: child.bytes,
+                    systemImage: category.systemImage,
+                    scope: scope,
+                    detailText: child.url.prettyPath
+                )
+            )
+        }
     }
 
     private func estimatedBytes(for targetURL: URL, categories: [StorageCategory]) -> Int64 {
@@ -418,7 +570,7 @@ struct StorageScanner: Sendable {
             buttonLabel: "Clear Docker Cache",
             targetURL: dockerRoot,
             strategy: .runCommand,
-            risk: .medium,
+            risk: .low,
             estimatedBytes: reclaimableBytes,
             systemImage: "shippingbox.fill",
             scope: .developer,
@@ -430,19 +582,64 @@ struct StorageScanner: Sendable {
         )
     }
 
+    private func makeDockerUnusedImagesRoutine(home: URL) -> CleanupRecommendation? {
+        guard let dockerExecutable = resolvedExecutable(named: "docker") else {
+            return nil
+        }
+
+        guard let output = try? runCommand(
+            executable: dockerExecutable,
+            arguments: ["system", "df", "--format", "json"]
+        ) else {
+            return nil
+        }
+
+        let reclaimableBytes = dockerReclaimableBytes(from: output, type: "Images")
+        guard reclaimableBytes > 0 else {
+            return nil
+        }
+
+        let dockerRoot = home.appending(path: "Library/Containers/com.docker.docker", directoryHint: .isDirectory)
+
+        return CleanupRecommendation(
+            title: "Review Unused Docker Images",
+            summary: "Runs `docker image prune -a --force` and removes unused images that are not referenced by any container. Useful when frequent builds and pushes leave old layers behind.",
+            buttonLabel: "Prune Docker Images",
+            targetURL: dockerRoot,
+            strategy: .runCommand,
+            risk: .medium,
+            estimatedBytes: reclaimableBytes,
+            systemImage: "shippingbox.fill",
+            scope: .developer,
+            detailText: "docker image prune -a --force",
+            command: CleanupCommand(
+                executable: dockerExecutable,
+                arguments: ["image", "prune", "-a", "--force"]
+            )
+        )
+    }
+
     private func dockerBuildCacheBytes(from output: String) -> Int64 {
+        dockerReclaimableBytes(from: output, type: "Build Cache")
+    }
+
+    private func dockerReclaimableBytes(from output: String, type: String) -> Int64 {
         output
             .split(whereSeparator: \.isNewline)
             .compactMap { line -> Int64? in
                 guard let data = line.data(using: .utf8),
                       let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      (payload["Type"] as? String) == "Build Cache",
+                      (payload["Type"] as? String) == type,
                       let reclaimable = payload["Reclaimable"] as? String else {
                     return nil
                 }
                 return parseHumanReadableBytes(reclaimable)
             }
             .first ?? 0
+    }
+
+    private func category(named title: String, categories: [StorageCategory]) -> StorageCategory? {
+        categories.first(where: { $0.title == title })
     }
 
     private func parseHumanReadableBytes(_ rawValue: String) -> Int64 {
@@ -543,7 +740,8 @@ struct StorageScanner: Sendable {
         categories: [StorageCategory],
         largestFiles: [StorageNode],
         inaccessiblePaths: Set<String>,
-        developerRoutines: [CleanupRecommendation]
+        developerRoutines: [CleanupRecommendation],
+        reviewRecommendations: [CleanupRecommendation]
     ) -> StorageSnapshot {
         let sortedInaccessiblePaths = inaccessiblePaths
             .map { URL(fileURLWithPath: $0, isDirectory: true) }
@@ -555,7 +753,8 @@ struct StorageScanner: Sendable {
             categories: categories.sorted { $0.totalBytes > $1.totalBytes },
             largestFiles: largestFiles.sorted { $0.bytes > $1.bytes },
             inaccessiblePaths: sortedInaccessiblePaths,
-            developerRoutines: developerRoutines
+            developerRoutines: developerRoutines,
+            reviewRecommendations: reviewRecommendations
         )
     }
 }

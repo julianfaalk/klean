@@ -148,6 +148,36 @@ struct StorageSnapshot: Codable, Sendable {
     let largestFiles: [StorageNode]
     let inaccessiblePaths: [URL]
     let developerRoutines: [CleanupRecommendation]
+    let reviewRecommendations: [CleanupRecommendation]
+
+    init(
+        volume: VolumeStats,
+        scannedAt: Date,
+        categories: [StorageCategory],
+        largestFiles: [StorageNode],
+        inaccessiblePaths: [URL],
+        developerRoutines: [CleanupRecommendation],
+        reviewRecommendations: [CleanupRecommendation]
+    ) {
+        self.volume = volume
+        self.scannedAt = scannedAt
+        self.categories = categories
+        self.largestFiles = largestFiles
+        self.inaccessiblePaths = inaccessiblePaths
+        self.developerRoutines = developerRoutines
+        self.reviewRecommendations = reviewRecommendations
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        volume = try container.decode(VolumeStats.self, forKey: .volume)
+        scannedAt = try container.decode(Date.self, forKey: .scannedAt)
+        categories = try container.decode([StorageCategory].self, forKey: .categories)
+        largestFiles = try container.decode([StorageNode].self, forKey: .largestFiles)
+        inaccessiblePaths = try container.decode([URL].self, forKey: .inaccessiblePaths)
+        developerRoutines = try container.decode([CleanupRecommendation].self, forKey: .developerRoutines)
+        reviewRecommendations = try container.decodeIfPresent([CleanupRecommendation].self, forKey: .reviewRecommendations) ?? []
+    }
 
     var scannedBytes: Int64 {
         categories.reduce(into: 0) { partialResult, category in
@@ -167,23 +197,37 @@ struct StorageSnapshot: Codable, Sendable {
 
     var generalCleanupRecommendations: [CleanupRecommendation] {
         cleanupRecommendations
-            .filter { $0.scope == .general }
+            .filter { $0.scope == .general && $0.risk == .low }
             .sorted { $0.estimatedBytes > $1.estimatedBytes }
     }
 
     var developerCleanupRecommendations: [CleanupRecommendation] {
-        let categoryDeveloperRoutines = cleanupRecommendations.filter { $0.scope == .developer }
-        return (categoryDeveloperRoutines + developerRoutines)
-            .sorted { $0.estimatedBytes > $1.estimatedBytes }
+        let categoryDeveloperRoutines = cleanupRecommendations.filter { $0.scope == .developer && $0.risk == .low }
+        let safeDeveloperRoutines = developerRoutines.filter { $0.risk == .low }
+        return uniqueRecommendations(categoryDeveloperRoutines + safeDeveloperRoutines)
+    }
+
+    var reviewCleanupRecommendations: [CleanupRecommendation] {
+        let categoryReviewRoutines = cleanupRecommendations.filter { $0.risk != .low }
+        let routineReviewRoutines = developerRoutines.filter { $0.risk != .low }
+        return uniqueRecommendations(categoryReviewRoutines + routineReviewRoutines + reviewRecommendations)
     }
 
     var allCleanupRecommendations: [CleanupRecommendation] {
-        (generalCleanupRecommendations + developerCleanupRecommendations)
-            .sorted { $0.estimatedBytes > $1.estimatedBytes }
+        uniqueRecommendations(generalCleanupRecommendations + developerCleanupRecommendations + reviewCleanupRecommendations)
     }
 
     var sortedCategories: [StorageCategory] {
         categories.sorted { $0.totalBytes > $1.totalBytes }
+    }
+
+    private func uniqueRecommendations(_ recommendations: [CleanupRecommendation]) -> [CleanupRecommendation] {
+        var seen = Set<String>()
+        return recommendations
+            .sorted { $0.estimatedBytes > $1.estimatedBytes }
+            .filter { recommendation in
+                seen.insert(recommendation.id).inserted
+            }
     }
 }
 

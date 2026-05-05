@@ -92,6 +92,7 @@ struct OverviewDashboard: View {
                     snapshot: viewModel.snapshot,
                     scanState: viewModel.scanState,
                     isShowingCachedData: viewModel.isShowingCachedData,
+                    startScan: { viewModel.startScan() },
                     openFullDiskAccessSettings: viewModel.openFullDiskAccessSettings
                 )
 
@@ -102,6 +103,13 @@ struct OverviewDashboard: View {
                         DeveloperRoutinesCard(
                             viewModel: viewModel,
                             recommendations: snapshot.developerCleanupRecommendations
+                        )
+                    }
+
+                    if !snapshot.reviewCleanupRecommendations.isEmpty {
+                        ReviewCleanupsCard(
+                            viewModel: viewModel,
+                            recommendations: snapshot.reviewCleanupRecommendations
                         )
                     }
 
@@ -174,6 +182,7 @@ struct OverviewDashboard: View {
                 }
             }
             .padding(.bottom, 28)
+            .animation(.snappy(duration: 0.24), value: viewModel.snapshot?.scannedAt)
         }
     }
 }
@@ -283,6 +292,7 @@ private struct OverviewHeroCard: View {
     let snapshot: StorageSnapshot?
     let scanState: ScanState
     let isShowingCachedData: Bool
+    let startScan: () -> Void
     let openFullDiskAccessSettings: () -> Void
 
     var body: some View {
@@ -292,12 +302,12 @@ private struct OverviewHeroCard: View {
                     HeroEyebrow(text: "Storage Control")
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Storage that finally feels like an interface")
-                            .font(.system(size: 38, weight: .bold, design: .rounded))
+                        Text("Storage overview")
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
                             .foregroundStyle(KleanTheme.ink)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        Text("klean makes volume usage, heavy hotspots, and safe cleanup actions readable at a glance. Anything macOS keeps opaque stays visible instead of being hand-waved away.")
+                        Text("See scanned storage, reclaimable cleanup targets, and the remaining system space without waiting for a full rescan after every action.")
                             .font(.title3.weight(.medium))
                             .foregroundStyle(KleanTheme.mutedInk)
                             .fixedSize(horizontal: false, vertical: true)
@@ -320,16 +330,21 @@ private struct OverviewHeroCard: View {
                     }
 
                     HStack(spacing: 12) {
-                        Button("Full Disk Access") {
-                            openFullDiskAccessSettings()
+                        Button {
+                            startScan()
+                        } label: {
+                            Label("Rescan", systemImage: "arrow.clockwise")
                         }
                         .buttonStyle(KleanPrimaryActionStyle())
                         .frame(height: 42)
 
-                        Button("What am I seeing?") {}
-                            .buttonStyle(KleanGhostActionStyle())
-                            .disabled(true)
-                            .frame(height: 42)
+                        Button {
+                            openFullDiskAccessSettings()
+                        } label: {
+                            Label("Full Disk Access", systemImage: "lock.shield")
+                        }
+                        .buttonStyle(KleanGhostActionStyle())
+                        .frame(height: 42)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -360,7 +375,7 @@ private struct OverviewInsightsRow: View {
             InsightCard(
                 label: "Reclaimable",
                 value: ByteCountFormatter.storageString(snapshot.reclaimableBytes),
-                note: "\(snapshot.allCleanupRecommendations.count.formatted()) useful routines available",
+                note: "\(snapshot.allCleanupRecommendations.count.formatted()) cleanup opportunities visible",
                 tint: KleanTheme.highlight
             )
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -425,8 +440,10 @@ private struct CategoryHeroCard: View {
                     Spacer()
 
                     if let recommendation = category.cleanupRecommendation {
-                        Button(recommendation.buttonLabel) {
+                        Button {
                             viewModel.requestCleanup(recommendation)
+                        } label: {
+                            Label(recommendation.buttonLabel, systemImage: "trash.fill")
                         }
                         .buttonStyle(KleanPrimaryActionStyle())
                     }
@@ -524,14 +541,14 @@ private struct QuickActionsCard: View {
             VStack(alignment: .leading, spacing: 18) {
                 SectionHeadline(
                     eyebrow: "Quick Clean",
-                    title: "Recommended actions with acceptable risk",
-                    subtitle: "Only areas the app can handle responsibly without turning into a file shredder."
+                    title: "Safe one-click cleanups",
+                    subtitle: "Only cleanup actions that are low risk and usually safe to regenerate."
                 )
 
                 if recommendations.isEmpty {
                     EmptyStateCard(
                         title: "Nothing automatable right now",
-                        message: "In the current snapshot, there is no immediate action that should be recommended without manual review."
+                        message: "The current snapshot does not expose any low-risk one-click cleanup worth running right now."
                     )
                 } else {
                     VStack(spacing: 12) {
@@ -547,6 +564,33 @@ private struct QuickActionsCard: View {
                 Spacer(minLength: 0)
             }
             .frame(maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+}
+
+private struct ReviewCleanupsCard: View {
+    @ObservedObject var viewModel: StorageDashboardViewModel
+    let recommendations: [CleanupRecommendation]
+
+    var body: some View {
+        CardShell {
+            VStack(alignment: .leading, spacing: 18) {
+                SectionHeadline(
+                    eyebrow: "Review Cleanups",
+                    title: "Large wins that need review",
+                    subtitle: "Apps, Docker images, simulator data, archives, and support folders with enough impact to be worth checking before removal."
+                )
+
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(recommendations.prefix(8)) { recommendation in
+                        ReviewCleanupRow(
+                            recommendation: recommendation,
+                            execute: { viewModel.requestCleanup(recommendation) }
+                        )
+                    }
+                }
+                .animation(.snappy(duration: 0.22), value: recommendations.map(\.id))
+            }
         }
     }
 }
@@ -729,9 +773,13 @@ private struct FileRowCard: View {
                     .foregroundStyle(KleanTheme.ink)
 
                 HStack(spacing: 8) {
-                    Button("Reveal", action: reveal)
+                    Button(action: reveal) {
+                        Label("Reveal", systemImage: "magnifyingglass")
+                    }
                         .buttonStyle(KleanSecondaryActionStyle())
-                    Button("Trash", action: trash)
+                    Button(action: trash) {
+                        Label("Trash", systemImage: "trash.fill")
+                    }
                         .buttonStyle(KleanPrimaryActionStyle())
                 }
             }
@@ -1057,7 +1105,9 @@ private struct QuickActionRow: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(KleanTheme.ink)
                     Spacer()
-                    Button(recommendation.buttonLabel, action: execute)
+                    Button(action: execute) {
+                        Label(recommendation.buttonLabel, systemImage: "sparkles")
+                    }
                         .buttonStyle(KleanPrimaryActionStyle())
                 }
             }
@@ -1122,7 +1172,9 @@ private struct DeveloperRoutineRow: View {
 
                     Spacer()
 
-                    Button(recommendation.buttonLabel, action: execute)
+                    Button(action: execute) {
+                        Label(recommendation.buttonLabel, systemImage: "sparkles")
+                    }
                         .buttonStyle(KleanPrimaryActionStyle())
                 }
             }
@@ -1130,6 +1182,74 @@ private struct DeveloperRoutineRow: View {
         }
         .padding(16)
         .frame(minHeight: 124)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(0.54))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.white.opacity(0.60), lineWidth: 1)
+        }
+    }
+}
+
+private struct ReviewCleanupRow: View {
+    let recommendation: CleanupRecommendation
+    let execute: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.white.opacity(0.80))
+                    .frame(width: 52, height: 52)
+
+                Image(systemName: recommendation.systemImage)
+                    .font(.system(size: 20, weight: .semibold))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(KleanTheme.warning, KleanTheme.highlight)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(recommendation.title)
+                        .font(.headline)
+                        .foregroundStyle(KleanTheme.ink)
+
+                    ScopeBadge(scope: recommendation.scope)
+                    RiskBadge(risk: recommendation.risk)
+
+                    Spacer()
+
+                    Text(ByteCountFormatter.storageString(recommendation.estimatedBytes))
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(KleanTheme.ink)
+                }
+
+                Text(recommendation.summary)
+                    .foregroundStyle(KleanTheme.mutedInk)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 10) {
+                    if let detailText = recommendation.detailText {
+                        Label(detailText, systemImage: recommendation.strategy == .runCommand ? "terminal.fill" : "magnifyingglass")
+                            .font(.caption)
+                            .foregroundStyle(KleanTheme.quietInk)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    Button(action: execute) {
+                        Label(recommendation.buttonLabel, systemImage: "trash.fill")
+                    }
+                        .buttonStyle(KleanSecondaryActionStyle())
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(16)
+        .frame(minHeight: 128)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(Color.white.opacity(0.54))
@@ -1220,6 +1340,22 @@ private struct RiskBadge: View {
                     .fill(risk.color.opacity(0.18))
             )
             .foregroundStyle(risk.color)
+    }
+}
+
+private struct ScopeBadge: View {
+    let scope: CleanupRecommendationScope
+
+    var body: some View {
+        Text(scope == .developer ? "Developer" : "Storage")
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(KleanTheme.info.opacity(0.15))
+            )
+            .foregroundStyle(KleanTheme.info)
     }
 }
 

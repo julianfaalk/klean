@@ -155,10 +155,11 @@ final class StorageDashboardViewModel: ObservableObject {
             guard let self else { return }
 
             do {
+                applyOptimisticUpdate(for: action)
+
                 switch action {
                 case let .cleanup(recommendation):
                     try cleanupManager.execute(recommendation)
-                    applyOptimisticUpdate(for: action)
                     persistCurrentSnapshot()
                     activeAlert = AppAlert(
                         kind: .info(
@@ -168,7 +169,6 @@ final class StorageDashboardViewModel: ObservableObject {
                     )
                 case let .trash(item):
                     try cleanupManager.moveItemToTrash(item.url)
-                    applyOptimisticUpdate(for: action)
                     persistCurrentSnapshot()
                     activeAlert = AppAlert(
                         kind: .info(
@@ -269,26 +269,46 @@ private extension StorageSnapshot {
             categories: mergedCategories,
             largestFiles: mergedLargestFiles,
             inaccessiblePaths: mergedInaccessiblePaths,
-            developerRoutines: refreshedSnapshot.developerRoutines
+            developerRoutines: refreshedSnapshot.developerRoutines,
+            reviewRecommendations: refreshedSnapshot.reviewRecommendations
         )
     }
 
     func applyingCleanup(_ recommendation: CleanupRecommendation) -> StorageSnapshot {
         let targetPath = recommendation.targetURL.standardizedFileURL.path
-        let updatedDeveloperRoutines = developerRoutines.filter { $0.id != recommendation.id }
+        let updatedDeveloperRoutines = developerRoutines.filter {
+            shouldKeepRecommendation($0, afterApplying: recommendation)
+        }
+        let updatedReviewRecommendations = reviewRecommendations.filter {
+            shouldKeepRecommendation($0, afterApplying: recommendation)
+        }
+        let shouldMoveToTrash = recommendation.strategy == .trashContents || recommendation.strategy == .moveItemToTrash
+        let shouldIncreaseFreeSpace = recommendation.strategy == .deleteContents || recommendation.strategy == .runCommand
+
         guard let targetIndex = categories.firstIndex(where: { $0.url.standardizedFileURL.path == targetPath }) else {
             if let sourceIndex = sourceCategoryIndex(for: recommendation.targetURL) {
                 var updatedCategories = categories
-                updatedCategories[sourceIndex] = updatedCategories[sourceIndex]
-                    .subtracting(bytes: recommendation.estimatedBytes)
+                let removedItemCount = updatedCategories[sourceIndex].estimatedItemCount(for: recommendation.targetURL)
+                updatedCategories[sourceIndex] = updatedCategories[sourceIndex].subtracting(
+                    targetURL: recommendation.targetURL,
+                    bytes: recommendation.estimatedBytes,
+                    removesTarget: recommendation.strategy != .runCommand
+                )
+
+                if shouldMoveToTrash,
+                   let trashIndex = updatedCategories.firstIndex(where: \.isTrashCategory) {
+                    updatedCategories[trashIndex] = updatedCategories[trashIndex]
+                        .adding(bytes: recommendation.estimatedBytes, itemCount: removedItemCount)
+                }
 
                 return StorageSnapshot(
-                    volume: recommendation.strategy == .deleteContents ? volume.adjustingAvailableBytes(by: recommendation.estimatedBytes) : volume,
+                    volume: shouldIncreaseFreeSpace ? volume.adjustingAvailableBytes(by: recommendation.estimatedBytes) : volume,
                     scannedAt: Date(),
                     categories: updatedCategories,
                     largestFiles: largestFiles.filter { !$0.url.path.hasPrefix(targetPath) },
                     inaccessiblePaths: inaccessiblePaths,
-                    developerRoutines: updatedDeveloperRoutines
+                    developerRoutines: updatedDeveloperRoutines,
+                    reviewRecommendations: updatedReviewRecommendations
                 )
             }
 
@@ -298,7 +318,8 @@ private extension StorageSnapshot {
                 categories: categories,
                 largestFiles: largestFiles,
                 inaccessiblePaths: inaccessiblePaths,
-                developerRoutines: updatedDeveloperRoutines
+                developerRoutines: updatedDeveloperRoutines,
+                reviewRecommendations: updatedReviewRecommendations
             )
         }
 
@@ -307,10 +328,9 @@ private extension StorageSnapshot {
         let removedBytes = targetCategory.totalBytes
         let removedItems = targetCategory.itemCount
 
-        updatedCategories[targetIndex] = targetCategory.cleared()
-
         switch recommendation.strategy {
         case .trashContents:
+            updatedCategories[targetIndex] = targetCategory.cleared()
             if let trashIndex = updatedCategories.firstIndex(where: \.isTrashCategory) {
                 updatedCategories[trashIndex] = updatedCategories[trashIndex]
                     .adding(bytes: removedBytes, itemCount: removedItems)
@@ -322,29 +342,54 @@ private extension StorageSnapshot {
                 categories: updatedCategories,
                 largestFiles: largestFiles.filter { !$0.url.path.hasPrefix(targetPath) },
                 inaccessiblePaths: inaccessiblePaths,
-                developerRoutines: updatedDeveloperRoutines
+                developerRoutines: updatedDeveloperRoutines,
+                reviewRecommendations: updatedReviewRecommendations
             )
 
         case .deleteContents:
+            updatedCategories[targetIndex] = targetCategory.cleared()
             return StorageSnapshot(
                 volume: volume.adjustingAvailableBytes(by: removedBytes),
                 scannedAt: Date(),
                 categories: updatedCategories,
                 largestFiles: largestFiles.filter { !$0.url.path.hasPrefix(targetPath) },
                 inaccessiblePaths: inaccessiblePaths,
-                developerRoutines: updatedDeveloperRoutines
+                developerRoutines: updatedDeveloperRoutines,
+                reviewRecommendations: updatedReviewRecommendations
             )
 
         case .moveItemToTrash:
-            return self
-        case .runCommand:
+            updatedCategories[targetIndex] = targetCategory.cleared()
+            if let trashIndex = updatedCategories.firstIndex(where: \.isTrashCategory) {
+                updatedCategories[trashIndex] = updatedCategories[trashIndex]
+                    .adding(bytes: removedBytes, itemCount: removedItems)
+            }
+
             return StorageSnapshot(
                 volume: volume,
                 scannedAt: Date(),
                 categories: updatedCategories,
                 largestFiles: largestFiles.filter { !$0.url.path.hasPrefix(targetPath) },
                 inaccessiblePaths: inaccessiblePaths,
-                developerRoutines: updatedDeveloperRoutines
+                developerRoutines: updatedDeveloperRoutines,
+                reviewRecommendations: updatedReviewRecommendations
+            )
+
+        case .runCommand:
+            updatedCategories[targetIndex] = targetCategory.subtracting(
+                targetURL: recommendation.targetURL,
+                bytes: recommendation.estimatedBytes,
+                removesTarget: false
+            )
+
+            return StorageSnapshot(
+                volume: volume.adjustingAvailableBytes(by: recommendation.estimatedBytes),
+                scannedAt: Date(),
+                categories: updatedCategories,
+                largestFiles: largestFiles.filter { !$0.url.path.hasPrefix(targetPath) },
+                inaccessiblePaths: inaccessiblePaths,
+                developerRoutines: updatedDeveloperRoutines,
+                reviewRecommendations: updatedReviewRecommendations
             )
         }
     }
@@ -368,8 +413,23 @@ private extension StorageSnapshot {
             categories: updatedCategories,
             largestFiles: largestFiles.filter { $0.id != item.id },
             inaccessiblePaths: inaccessiblePaths,
-            developerRoutines: developerRoutines
+            developerRoutines: developerRoutines,
+            reviewRecommendations: reviewRecommendations
         )
+    }
+
+    private func shouldKeepRecommendation(_ existingRecommendation: CleanupRecommendation, afterApplying appliedRecommendation: CleanupRecommendation) -> Bool {
+        guard existingRecommendation.id != appliedRecommendation.id else {
+            return false
+        }
+
+        guard appliedRecommendation.strategy != .runCommand else {
+            return true
+        }
+
+        let existingPath = existingRecommendation.targetURL.standardizedFileURL.path
+        let appliedPath = appliedRecommendation.targetURL.standardizedFileURL.path
+        return existingPath != appliedPath && existingPath.hasPrefix(appliedPath + "/") == false
     }
 
     private func sourceCategoryIndex(for url: URL) -> Int? {
@@ -460,6 +520,62 @@ private extension StorageCategory {
             topChildren: updatedChildren,
             cleanupRecommendation: cleanupRecommendation?.withEstimatedBytes(updatedBytes)
         )
+    }
+
+    func subtracting(targetURL: URL, bytes: Int64, removesTarget: Bool) -> StorageCategory {
+        let targetPath = targetURL.standardizedFileURL.path
+        let updatedBytes = max(totalBytes - bytes, 0)
+        var removedItemCount = 0
+
+        let updatedChildren = topChildren.compactMap { child -> StorageNode? in
+            let childPath = child.url.standardizedFileURL.path
+            let targetMatchesChild = childPath == targetPath || childPath.hasPrefix(targetPath + "/")
+            let targetIsInsideChild = targetPath.hasPrefix(childPath + "/")
+
+            if removesTarget && targetMatchesChild {
+                removedItemCount += max(child.itemCount, 1)
+                return nil
+            }
+
+            guard targetMatchesChild || targetIsInsideChild else {
+                return child
+            }
+
+            let childBytes = max(child.bytes - bytes, 0)
+            guard childBytes > 0 else {
+                removedItemCount += max(child.itemCount, 1)
+                return nil
+            }
+
+            return StorageNode(
+                url: child.url,
+                name: child.name,
+                bytes: childBytes,
+                itemCount: child.itemCount,
+                kind: child.kind,
+                modifiedAt: child.modifiedAt
+            )
+        }
+
+        return StorageCategory(
+            title: title,
+            subtitle: subtitle,
+            systemImage: systemImage,
+            url: url,
+            totalBytes: updatedBytes,
+            itemCount: max(itemCount - removedItemCount, 0),
+            topChildren: updatedChildren.sorted { $0.bytes > $1.bytes },
+            cleanupRecommendation: cleanupRecommendation?.withEstimatedBytes(updatedBytes)
+        )
+    }
+
+    func estimatedItemCount(for targetURL: URL) -> Int {
+        let targetPath = targetURL.standardizedFileURL.path
+        return topChildren.first { child in
+            let childPath = child.url.standardizedFileURL.path
+            return childPath == targetPath || childPath.hasPrefix(targetPath + "/") || targetPath.hasPrefix(childPath + "/")
+        }
+        .map { max($0.itemCount, 1) } ?? 1
     }
 }
 

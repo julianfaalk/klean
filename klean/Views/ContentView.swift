@@ -54,12 +54,23 @@ struct ContentView: View {
                 return Alert(
                     title: Text(title),
                     message: Text(message),
-                    primaryButton: .destructive(Text("Run")) {
+                    primaryButton: .destructive(Text(action.confirmationButtonTitle)) {
                         viewModel.perform(action)
                     },
                     secondaryButton: .cancel(Text("Cancel"))
                 )
             }
+        }
+    }
+}
+
+private extension ConfirmedAction {
+    var confirmationButtonTitle: String {
+        switch self {
+        case let .cleanup(recommendation):
+            return recommendation.buttonLabel
+        case .trash:
+            return "Move to Trash"
         }
     }
 }
