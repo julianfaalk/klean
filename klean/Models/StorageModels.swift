@@ -217,8 +217,49 @@ struct StorageSnapshot: Codable, Sendable {
         uniqueRecommendations(generalCleanupRecommendations + developerCleanupRecommendations + reviewCleanupRecommendations)
     }
 
+    var immediateCleanupRecommendations: [CleanupRecommendation] {
+        uniqueRecommendations(generalCleanupRecommendations + developerCleanupRecommendations)
+    }
+
+    var immediateReclaimableBytes: Int64 {
+        immediateCleanupRecommendations.reduce(into: 0) { partialResult, recommendation in
+            partialResult += recommendation.estimatedBytes
+        }
+    }
+
+    var reviewReclaimableBytes: Int64 {
+        reviewCleanupRecommendations.reduce(into: 0) { partialResult, recommendation in
+            partialResult += recommendation.estimatedBytes
+        }
+    }
+
+    var reclaimableBytes: Int64 {
+        allCleanupRecommendations.reduce(into: 0) { partialResult, recommendation in
+            partialResult += recommendation.estimatedBytes
+        }
+    }
+
     var sortedCategories: [StorageCategory] {
         categories.sorted { $0.totalBytes > $1.totalBytes }
+    }
+
+    var actionableStorageHogs: [StorageNode] {
+        var seen = Set<String>()
+        let candidates = sortedCategories
+            .flatMap(\.topChildren) + largestFiles
+
+        return candidates
+            .filter { $0.bytes > 0 }
+            .filter { $0.url.path.contains("/.Trash/") == false }
+            .sorted {
+                if $0.bytes == $1.bytes {
+                    return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                }
+                return $0.bytes > $1.bytes
+            }
+            .filter { node in
+                seen.insert(node.id).inserted
+            }
     }
 
     private func uniqueRecommendations(_ recommendations: [CleanupRecommendation]) -> [CleanupRecommendation] {

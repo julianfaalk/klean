@@ -51,7 +51,8 @@ Today it already covers:
 
 - storage overview with transparent `System/Rest`
 - hotspot scanning for common heavy folders
-- safe cleanup actions for selected locations
+- safe cleanup actions for selected locations, including a grouped safe-cleanup run
+- a current space-hogs list with Finder and Trash actions
 - dedicated developer cleanup routines in the dashboard
 - cached startup with progressive refresh during scans
 
@@ -62,7 +63,8 @@ Today it already covers:
 | Storage Overview | Used, free, scanned, and unexplained storage shown without pretending opaque system data is fully understood |
 | Hotspot Scan | Fast scan across common heavy directories like Downloads, Documents, Pictures, Caches, Xcode, and Simulator data |
 | Developer Cleanups | Ready-to-run routines for common rebuildable artifacts from local development workflows |
-| Safety Model | Risk labels such as `Sicher`, `Pruefen`, and `Vorsicht`, plus explicit estimated reclaimable space |
+| Cleanup Command Center | One place to see safe reclaimable space, review-only reclaimable space, and the largest current storage hog |
+| Safety Model | Risk labels such as `Safe`, `Review`, and `Caution`, plus explicit estimated reclaimable space |
 | Direct Actions | Reveal in Finder, move to Trash, or run a known cleanup routine from the UI |
 | Cached Startup | The last successful snapshot appears immediately while a fresh scan streams in |
 
@@ -75,6 +77,9 @@ The current dashboard can surface routines like:
 - `SwiftPM Cache`
 - `Flutter Pub Cache`
 - `CoreSimulator Caches`
+- `Homebrew Cache`
+- `CocoaPods Cache`
+- `Gradle Caches`
 - `Docker Build Cache`
 
 The intent is that these routines are allowlist-based and understandable, not generic “delete random large files” actions.
@@ -127,5 +132,4 @@ project.yml
 
 ## Notes
 
-- The app UI is currently mostly German
-- The repository and code comments stay in English for public sharing
+- The app UI, screenshots, repository docs, and code comments are kept in English for public sharing

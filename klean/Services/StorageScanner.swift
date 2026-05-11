@@ -21,6 +21,17 @@ struct StorageScanner: Sendable {
         let inaccessiblePaths: [URL]
     }
 
+    private struct DockerSystemSnapshot {
+        let executable: String
+        let output: String
+    }
+
+    private struct RoutineContext {
+        var directorySizeCache: [String: Int64] = [:]
+        var dockerSnapshot: DockerSystemSnapshot?
+        var didResolveDockerSnapshot = false
+    }
+
     private let maximumLargestFiles = 18
     private let maximumChildrenPerCategory = 14
     private let resourceKeys: Set<URLResourceKey> = [
@@ -47,6 +58,7 @@ struct StorageScanner: Sendable {
         var categories: [StorageCategory] = []
         var largestFiles: [StorageNode] = []
         var inaccessiblePaths = Set<String>()
+        var routineContext = RoutineContext()
 
         for (index, target) in targets.enumerated() {
             try Task.checkCancellation()
@@ -65,8 +77,8 @@ struct StorageScanner: Sendable {
                 inaccessiblePaths.insert(target.url.path)
             }
 
-            let developerRoutines = makeDeveloperRoutines(home: home, categories: categories)
-            let reviewRecommendations = makeReviewRecommendations(home: home, categories: categories)
+            let developerRoutines = makeDeveloperRoutines(home: home, categories: categories, context: &routineContext)
+            let reviewRecommendations = makeReviewRecommendations(home: home, categories: categories, context: &routineContext)
             let update = ScanUpdate(
                 snapshot: makeSnapshot(
                     volume: volume,
@@ -85,8 +97,8 @@ struct StorageScanner: Sendable {
             await partialUpdate(update)
         }
 
-        let developerRoutines = makeDeveloperRoutines(home: home, categories: categories)
-        let reviewRecommendations = makeReviewRecommendations(home: home, categories: categories)
+        let developerRoutines = makeDeveloperRoutines(home: home, categories: categories, context: &routineContext)
+        let reviewRecommendations = makeReviewRecommendations(home: home, categories: categories, context: &routineContext)
         return makeSnapshot(
             volume: volume,
             categories: categories,
@@ -283,7 +295,11 @@ struct StorageScanner: Sendable {
         )
     }
 
-    private func makeDeveloperRoutines(home: URL, categories: [StorageCategory]) -> [CleanupRecommendation] {
+    private func makeDeveloperRoutines(
+        home: URL,
+        categories: [StorageCategory],
+        context: inout RoutineContext
+    ) -> [CleanupRecommendation] {
         var routines: [CleanupRecommendation] = []
 
         appendDirectoryRoutine(
@@ -294,7 +310,8 @@ struct StorageScanner: Sendable {
             targetURL: home.appending(path: "Library/Caches/org.swift.swiftpm", directoryHint: .isDirectory),
             systemImage: "shippingbox.fill",
             risk: .low,
-            categories: categories
+            categories: categories,
+            context: &context
         )
 
         appendDirectoryRoutine(
@@ -305,7 +322,8 @@ struct StorageScanner: Sendable {
             targetURL: home.appending(path: ".pub-cache", directoryHint: .isDirectory),
             systemImage: "square.stack.3d.up.fill",
             risk: .low,
-            categories: categories
+            categories: categories,
+            context: &context
         )
 
         appendDirectoryRoutine(
@@ -316,17 +334,58 @@ struct StorageScanner: Sendable {
             targetURL: home.appending(path: "Library/Developer/CoreSimulator/Caches", directoryHint: .isDirectory),
             systemImage: "iphone.gen3",
             risk: .low,
-            categories: categories
+            categories: categories,
+            context: &context
         )
 
-        if let dockerRoutine = makeDockerBuildCacheRoutine(home: home) {
+        appendDirectoryRoutine(
+            to: &routines,
+            title: "Clear Homebrew Cache",
+            summary: "Removes downloaded Homebrew formula and cask cache files. Homebrew will download them again when needed.",
+            buttonLabel: "Clear Homebrew Cache",
+            targetURL: home.appending(path: "Library/Caches/Homebrew", directoryHint: .isDirectory),
+            systemImage: "mug.fill",
+            risk: .low,
+            categories: categories,
+            context: &context
+        )
+
+        appendDirectoryRoutine(
+            to: &routines,
+            title: "Clear CocoaPods Cache",
+            summary: "Removes CocoaPods package cache data. Pods can be fetched again during the next install.",
+            buttonLabel: "Clear CocoaPods Cache",
+            targetURL: home.appending(path: "Library/Caches/CocoaPods", directoryHint: .isDirectory),
+            systemImage: "square.stack.3d.up.fill",
+            risk: .low,
+            categories: categories,
+            context: &context
+        )
+
+        appendDirectoryRoutine(
+            to: &routines,
+            title: "Clear Gradle Caches",
+            summary: "Moves Gradle dependency and build caches to the Trash. Gradle will rebuild and download what it needs later.",
+            buttonLabel: "Clear Gradle Caches",
+            targetURL: home.appending(path: ".gradle/caches", directoryHint: .isDirectory),
+            systemImage: "hammer.fill",
+            risk: .low,
+            categories: categories,
+            context: &context
+        )
+
+        if let dockerRoutine = makeDockerBuildCacheRoutine(home: home, context: &context) {
             routines.append(dockerRoutine)
         }
 
         return routines.sorted { $0.estimatedBytes > $1.estimatedBytes }
     }
 
-    private func makeReviewRecommendations(home: URL, categories: [StorageCategory]) -> [CleanupRecommendation] {
+    private func makeReviewRecommendations(
+        home: URL,
+        categories: [StorageCategory],
+        context: inout RoutineContext
+    ) -> [CleanupRecommendation] {
         var recommendations: [CleanupRecommendation] = []
 
         appendLargestChildReviewRecommendations(
@@ -336,7 +395,7 @@ struct StorageScanner: Sendable {
             minimumBytes: 2 * 1_024 * 1_024 * 1_024,
             risk: .medium,
             scope: .general,
-            buttonLabel: "Move App To Trash",
+            buttonLabel: "Move App to Trash",
             summaryBuilder: { child in
                 "A large installed app bundle. Remove it if you no longer use it and want the space back."
             }
@@ -349,7 +408,7 @@ struct StorageScanner: Sendable {
             minimumBytes: 1 * 1_024 * 1_024 * 1_024,
             risk: .medium,
             scope: .general,
-            buttonLabel: "Move To Trash",
+            buttonLabel: "Move to Trash",
             summaryBuilder: { _ in
                 "A large item in Downloads. Good candidate if it is an old DMG, ZIP, export, or installer."
             }
@@ -362,7 +421,7 @@ struct StorageScanner: Sendable {
             minimumBytes: 2 * 1_024 * 1_024 * 1_024,
             risk: .high,
             scope: .general,
-            buttonLabel: "Move Data To Trash",
+            buttonLabel: "Move Data to Trash",
             summaryBuilder: { _ in
                 "Large application support data. Review carefully before removing because app state or local databases may live here."
             }
@@ -375,7 +434,7 @@ struct StorageScanner: Sendable {
             minimumBytes: 2 * 1_024 * 1_024 * 1_024,
             risk: .high,
             scope: .general,
-            buttonLabel: "Move Container To Trash",
+            buttonLabel: "Move Container to Trash",
             summaryBuilder: { _ in
                 "Large sandbox container data. Only remove it if you intentionally want to reset or uninstall the related app."
             }
@@ -391,10 +450,11 @@ struct StorageScanner: Sendable {
             risk: .high,
             scope: .developer,
             minimumBytes: 1 * 1_024 * 1_024 * 1_024,
-            categories: categories
+            categories: categories,
+            context: &context
         )
 
-        if let dockerImageRoutine = makeDockerUnusedImagesRoutine(home: home) {
+        if let dockerImageRoutine = makeDockerUnusedImagesRoutine(home: home, context: &context) {
             recommendations.append(dockerImageRoutine)
         }
 
@@ -409,13 +469,14 @@ struct StorageScanner: Sendable {
         targetURL: URL,
         systemImage: String,
         risk: CleanupRisk,
-        categories: [StorageCategory]
+        categories: [StorageCategory],
+        context: inout RoutineContext
     ) {
         guard FileManager.default.fileExists(atPath: targetURL.path) else {
             return
         }
 
-        let estimatedBytes = estimatedBytes(for: targetURL, categories: categories)
+        let estimatedBytes = estimatedBytes(for: targetURL, categories: categories, context: &context)
         guard estimatedBytes > 0 else {
             return
         }
@@ -446,13 +507,14 @@ struct StorageScanner: Sendable {
         risk: CleanupRisk,
         scope: CleanupRecommendationScope,
         minimumBytes: Int64,
-        categories: [StorageCategory]
+        categories: [StorageCategory],
+        context: inout RoutineContext
     ) {
         guard FileManager.default.fileExists(atPath: targetURL.path) else {
             return
         }
 
-        let estimatedBytes = estimatedBytes(for: targetURL, categories: categories)
+        let estimatedBytes = estimatedBytes(for: targetURL, categories: categories, context: &context)
         guard estimatedBytes >= minimumBytes else {
             return
         }
@@ -509,12 +571,38 @@ struct StorageScanner: Sendable {
         }
     }
 
-    private func estimatedBytes(for targetURL: URL, categories: [StorageCategory]) -> Int64 {
-        if let matchingCategory = categories.first(where: { $0.url.standardizedFileURL.path == targetURL.standardizedFileURL.path }) {
+    private func estimatedBytes(
+        for targetURL: URL,
+        categories: [StorageCategory],
+        context: inout RoutineContext
+    ) -> Int64 {
+        let targetPath = targetURL.standardizedFileURL.path
+
+        if let matchingCategory = categories.first(where: { $0.url.standardizedFileURL.path == targetPath }) {
             return matchingCategory.totalBytes
         }
 
-        return directorySize(at: targetURL)
+        let matchingChildBytes = categories
+            .flatMap(\.topChildren)
+            .filter { child in
+                let childPath = child.url.standardizedFileURL.path
+                return childPath == targetPath || childPath.hasPrefix(targetPath + "/")
+            }
+            .reduce(into: Int64(0)) { partialResult, child in
+                partialResult += child.bytes
+            }
+
+        if matchingChildBytes > 0 {
+            return matchingChildBytes
+        }
+
+        if let cachedSize = context.directorySizeCache[targetPath] {
+            return cachedSize
+        }
+
+        let size = directorySize(at: targetURL)
+        context.directorySizeCache[targetPath] = size
+        return size
     }
 
     private func directorySize(at rootURL: URL) -> Int64 {
@@ -545,19 +633,12 @@ struct StorageScanner: Sendable {
         return totalBytes
     }
 
-    private func makeDockerBuildCacheRoutine(home: URL) -> CleanupRecommendation? {
-        guard let dockerExecutable = resolvedExecutable(named: "docker") else {
+    private func makeDockerBuildCacheRoutine(home: URL, context: inout RoutineContext) -> CleanupRecommendation? {
+        guard let dockerSnapshot = dockerSystemSnapshot(context: &context) else {
             return nil
         }
 
-        guard let output = try? runCommand(
-            executable: dockerExecutable,
-            arguments: ["system", "df", "--format", "json"]
-        ) else {
-            return nil
-        }
-
-        let reclaimableBytes = dockerBuildCacheBytes(from: output)
+        let reclaimableBytes = dockerBuildCacheBytes(from: dockerSnapshot.output)
         guard reclaimableBytes > 0 else {
             return nil
         }
@@ -576,25 +657,18 @@ struct StorageScanner: Sendable {
             scope: .developer,
             detailText: "docker buildx prune --all --force",
             command: CleanupCommand(
-                executable: dockerExecutable,
+                executable: dockerSnapshot.executable,
                 arguments: ["buildx", "prune", "--all", "--force"]
             )
         )
     }
 
-    private func makeDockerUnusedImagesRoutine(home: URL) -> CleanupRecommendation? {
-        guard let dockerExecutable = resolvedExecutable(named: "docker") else {
+    private func makeDockerUnusedImagesRoutine(home: URL, context: inout RoutineContext) -> CleanupRecommendation? {
+        guard let dockerSnapshot = dockerSystemSnapshot(context: &context) else {
             return nil
         }
 
-        guard let output = try? runCommand(
-            executable: dockerExecutable,
-            arguments: ["system", "df", "--format", "json"]
-        ) else {
-            return nil
-        }
-
-        let reclaimableBytes = dockerReclaimableBytes(from: output, type: "Images")
+        let reclaimableBytes = dockerReclaimableBytes(from: dockerSnapshot.output, type: "Images")
         guard reclaimableBytes > 0 else {
             return nil
         }
@@ -613,10 +687,31 @@ struct StorageScanner: Sendable {
             scope: .developer,
             detailText: "docker image prune -a --force",
             command: CleanupCommand(
-                executable: dockerExecutable,
+                executable: dockerSnapshot.executable,
                 arguments: ["image", "prune", "-a", "--force"]
             )
         )
+    }
+
+    private func dockerSystemSnapshot(context: inout RoutineContext) -> DockerSystemSnapshot? {
+        if context.didResolveDockerSnapshot {
+            return context.dockerSnapshot
+        }
+
+        context.didResolveDockerSnapshot = true
+
+        guard let dockerExecutable = resolvedExecutable(named: "docker"),
+              let output = try? runCommand(
+                executable: dockerExecutable,
+                arguments: ["system", "df", "--format", "json"],
+                timeout: 4
+              ) else {
+            return nil
+        }
+
+        let snapshot = DockerSystemSnapshot(executable: dockerExecutable, output: output)
+        context.dockerSnapshot = snapshot
+        return snapshot
     }
 
     private func dockerBuildCacheBytes(from output: String) -> Int64 {
@@ -689,7 +784,7 @@ struct StorageScanner: Sendable {
         return candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) })
     }
 
-    private func runCommand(executable: String, arguments: [String]) throws -> String {
+    private func runCommand(executable: String, arguments: [String], timeout: TimeInterval = 10) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
@@ -699,8 +794,22 @@ struct StorageScanner: Sendable {
         process.standardOutput = outputPipe
         process.standardError = errorPipe
 
+        let terminationSemaphore = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in
+            terminationSemaphore.signal()
+        }
+
         try process.run()
-        process.waitUntilExit()
+
+        if terminationSemaphore.wait(timeout: .now() + timeout) == .timedOut {
+            process.terminate()
+            process.waitUntilExit()
+            process.terminationHandler = nil
+            throw NSError(domain: "StorageScanner", code: 124, userInfo: [
+                NSLocalizedDescriptionKey: "\(executable) timed out while collecting cleanup estimates."
+            ])
+        }
+        process.terminationHandler = nil
 
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()

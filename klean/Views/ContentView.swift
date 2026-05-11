@@ -69,6 +69,8 @@ private extension ConfirmedAction {
         switch self {
         case let .cleanup(recommendation):
             return recommendation.buttonLabel
+        case .cleanupBatch:
+            return "Run Safe Cleanups"
         case .trash:
             return "Move to Trash"
         }

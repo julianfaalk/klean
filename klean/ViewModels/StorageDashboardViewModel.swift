@@ -8,7 +8,14 @@ enum SidebarSelection: Hashable {
 
 enum ConfirmedAction {
     case cleanup(CleanupRecommendation)
+    case cleanupBatch([CleanupRecommendation])
     case trash(StorageNode)
+}
+
+struct CleanupBatchResult {
+    let completedCount: Int
+    let reclaimedBytes: Int64
+    let failures: [String]
 }
 
 struct AppAlert: Identifiable {
@@ -28,9 +35,9 @@ final class StorageDashboardViewModel: ObservableObject {
     @Published var selection: SidebarSelection = .overview
     @Published var activeAlert: AppAlert?
     @Published var isShowingCachedData = false
+    @Published var isPerformingCleanup = false
 
     private let scanner = StorageScanner()
-    private let cleanupManager = CleanupManager()
     private let snapshotStore = SnapshotStore()
     private let automaticRefreshInterval: TimeInterval = 15 * 60
     private var scanTask: Task<Void, Never>?
@@ -140,40 +147,102 @@ final class StorageDashboardViewModel: ObservableObject {
         )
     }
 
+    func requestSafeCleanupBatch() {
+        guard let snapshot else {
+            return
+        }
+
+        let recommendations = Array(snapshot.immediateCleanupRecommendations.prefix(6))
+        guard !recommendations.isEmpty else {
+            activeAlert = AppAlert(
+                kind: .info(
+                    title: "No Safe Cleanups Available",
+                    message: "The current snapshot does not show any low-risk cleanup actions worth running right now."
+                )
+            )
+            return
+        }
+
+        let totalBytes = recommendations.reduce(into: Int64(0)) { partialResult, recommendation in
+            partialResult += recommendation.estimatedBytes
+        }
+        let actionList = recommendations
+            .prefix(5)
+            .map { "• \($0.title) (\(ByteCountFormatter.storageString($0.estimatedBytes)))" }
+            .joined(separator: "\n")
+
+        activeAlert = AppAlert(
+            kind: .confirmation(
+                title: "Run Safe Cleanups?",
+                message: "klean will run \(recommendations.count.formatted()) low-risk cleanup actions.\n\nEstimated impact: \(ByteCountFormatter.storageString(totalBytes))\n\n\(actionList)",
+                action: .cleanupBatch(recommendations)
+            )
+        )
+    }
+
     func requestTrash(_ item: StorageNode) {
         activeAlert = AppAlert(
             kind: .confirmation(
-                title: "Move To Trash?",
-                message: "\(item.name) will be moved to your Trash.",
+                title: "Move to Trash?",
+                message: "\(item.name) will be moved to your Trash.\n\nPath: \(item.url.prettyPath)\nSize: \(ByteCountFormatter.storageString(item.bytes))\n\nYou can still restore it from Trash until the Trash is emptied.",
                 action: .trash(item)
             )
         )
     }
 
     func perform(_ action: ConfirmedAction) {
+        guard isPerformingCleanup == false else {
+            return
+        }
+
+        isPerformingCleanup = true
+
         Task { [weak self] in
             guard let self else { return }
 
-            do {
-                applyOptimisticUpdate(for: action)
+            defer {
+                self.isPerformingCleanup = false
+            }
 
+            do {
                 switch action {
                 case let .cleanup(recommendation):
-                    try cleanupManager.execute(recommendation)
+                    applyOptimisticUpdate(for: action)
+                    try await executeCleanup(recommendation)
                     persistCurrentSnapshot()
                     activeAlert = AppAlert(
                         kind: .info(
                             title: "Cleanup Complete",
-                            message: "\(recommendation.title) finished successfully."
+                            message: "\(recommendation.title) finished successfully. A fresh scan is starting now."
                         )
                     )
+                case let .cleanupBatch(recommendations):
+                    let result = await executeCleanupBatch(recommendations)
+                    persistCurrentSnapshot()
+
+                    if result.failures.isEmpty {
+                        activeAlert = AppAlert(
+                            kind: .info(
+                                title: "Safe Cleanups Complete",
+                                message: "\(result.completedCount.formatted()) actions finished successfully. Estimated reclaimed space: \(ByteCountFormatter.storageString(result.reclaimedBytes))."
+                            )
+                        )
+                    } else {
+                        activeAlert = AppAlert(
+                            kind: .info(
+                                title: "Cleanup Partially Complete",
+                                message: "\(result.completedCount.formatted()) actions finished. \(result.failures.count.formatted()) actions need attention.\n\n\(result.failures.prefix(3).joined(separator: "\n"))"
+                            )
+                        )
+                    }
                 case let .trash(item):
-                    try cleanupManager.moveItemToTrash(item.url)
+                    applyOptimisticUpdate(for: action)
+                    try await moveItemToTrash(item.url)
                     persistCurrentSnapshot()
                     activeAlert = AppAlert(
                         kind: .info(
-                            title: "Moved To Trash",
-                            message: "\(item.name) is now in the Trash."
+                            title: "Moved to Trash",
+                            message: "\(item.name) is now in the Trash. A fresh scan is starting now."
                         )
                     )
                 }
@@ -189,6 +258,43 @@ final class StorageDashboardViewModel: ObservableObject {
                 )
             }
         }
+    }
+
+    private func executeCleanup(_ recommendation: CleanupRecommendation) async throws {
+        try await Task.detached(priority: .userInitiated) {
+            try CleanupManager().execute(recommendation)
+        }.value
+    }
+
+    private func moveItemToTrash(_ url: URL) async throws {
+        try await Task.detached(priority: .userInitiated) {
+            try CleanupManager().moveItemToTrash(url)
+        }.value
+    }
+
+    private func executeCleanupBatch(_ recommendations: [CleanupRecommendation]) async -> CleanupBatchResult {
+        var completedCount = 0
+        var reclaimedBytes: Int64 = 0
+        var failures: [String] = []
+
+        for recommendation in recommendations {
+            do {
+                applyOptimisticUpdate(for: .cleanup(recommendation))
+                try await executeCleanup(recommendation)
+                completedCount += 1
+                reclaimedBytes += recommendation.estimatedBytes
+            } catch CleanupManager.CleanupError.nothingToClean {
+                completedCount += 1
+            } catch {
+                failures.append("\(recommendation.title): \(error.localizedDescription)")
+            }
+        }
+
+        return CleanupBatchResult(
+            completedCount: completedCount,
+            reclaimedBytes: reclaimedBytes,
+            failures: failures
+        )
     }
 }
 
@@ -234,6 +340,10 @@ private extension StorageDashboardViewModel {
         switch action {
         case let .cleanup(recommendation):
             self.snapshot = snapshot.applyingCleanup(recommendation)
+        case let .cleanupBatch(recommendations):
+            self.snapshot = recommendations.reduce(snapshot) { partialSnapshot, recommendation in
+                partialSnapshot.applyingCleanup(recommendation)
+            }
         case let .trash(item):
             self.snapshot = snapshot.applyingTrash(of: item)
         }

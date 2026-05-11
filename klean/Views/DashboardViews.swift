@@ -99,6 +99,8 @@ struct OverviewDashboard: View {
                 if let snapshot = viewModel.snapshot {
                     OverviewInsightsRow(snapshot: snapshot)
 
+                    CleanupCommandCenterCard(viewModel: viewModel, snapshot: snapshot)
+
                     if !snapshot.developerCleanupRecommendations.isEmpty {
                         DeveloperRoutinesCard(
                             viewModel: viewModel,
@@ -110,6 +112,15 @@ struct OverviewDashboard: View {
                         ReviewCleanupsCard(
                             viewModel: viewModel,
                             recommendations: snapshot.reviewCleanupRecommendations
+                        )
+                    }
+
+                    if !snapshot.actionableStorageHogs.isEmpty {
+                        FileListCard(
+                            title: "Current Space Hogs",
+                            subtitle: "The largest actionable files and folders found across the scanned hotspots.",
+                            items: Array(snapshot.actionableStorageHogs.prefix(8)),
+                            viewModel: viewModel
                         )
                     }
 
@@ -392,7 +403,196 @@ private struct OverviewInsightsRow: View {
     private func scanCoverageText(_ snapshot: StorageSnapshot) -> String {
         let used = max(snapshot.volume.usedBytes, 1)
         let fraction = Double(snapshot.scannedBytes) / Double(used)
-        return "\(Int((fraction * 100).rounded()))%"
+        return "\(min(Int((fraction * 100).rounded()), 100))%"
+    }
+}
+
+private struct CleanupCommandCenterCard: View {
+    @ObservedObject var viewModel: StorageDashboardViewModel
+    let snapshot: StorageSnapshot
+
+    private var topRecommendation: CleanupRecommendation? {
+        snapshot.allCleanupRecommendations.first
+    }
+
+    var body: some View {
+        CardShell {
+            HStack(alignment: .top, spacing: 22) {
+                VStack(alignment: .leading, spacing: 18) {
+                    SectionHeadline(
+                        eyebrow: "Action Plan",
+                        title: "Free space without losing the overview",
+                        subtitle: "Safe cleanup is grouped into one confirmation, while larger or riskier wins stay explicit."
+                    )
+
+                    HStack(spacing: 12) {
+                        CommandMetricCard(
+                            title: "Safe Now",
+                            value: ByteCountFormatter.storageString(snapshot.immediateReclaimableBytes),
+                            note: "\(snapshot.immediateCleanupRecommendations.count.formatted()) ready actions",
+                            tint: KleanTheme.success
+                        )
+                        CommandMetricCard(
+                            title: "Needs Review",
+                            value: ByteCountFormatter.storageString(snapshot.reviewReclaimableBytes),
+                            note: "\(snapshot.reviewCleanupRecommendations.count.formatted()) high-impact targets",
+                            tint: KleanTheme.warning
+                        )
+                        CommandMetricCard(
+                            title: "Largest Hog",
+                            value: topHogSizeText,
+                            note: topHogNameText,
+                            tint: KleanTheme.info
+                        )
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Button {
+                        viewModel.requestSafeCleanupBatch()
+                    } label: {
+                        Label(viewModel.isPerformingCleanup ? "Cleaning..." : "Run Safe Cleanups", systemImage: "bolt.circle.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(KleanPrimaryActionStyle())
+                    .disabled(snapshot.immediateCleanupRecommendations.isEmpty || viewModel.isPerformingCleanup)
+
+                    if let topRecommendation {
+                        Button {
+                            viewModel.requestCleanup(topRecommendation)
+                        } label: {
+                            Label(topRecommendation.risk == .low ? "Run Top Cleanup" : "Review Top Target", systemImage: topRecommendation.risk == .low ? "sparkles" : "magnifyingglass")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(KleanSecondaryActionStyle())
+                        .disabled(viewModel.isPerformingCleanup)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(topRecommendation.title)
+                                .font(.headline)
+                                .foregroundStyle(KleanTheme.ink)
+                                .lineLimit(1)
+                            Text("\(ByteCountFormatter.storageString(topRecommendation.estimatedBytes)) • \(topRecommendation.risk.label)")
+                                .font(.caption)
+                                .foregroundStyle(KleanTheme.mutedInk)
+                        }
+                        .padding(.top, 4)
+                    } else {
+                        Text("No cleanup targets are visible in this snapshot.")
+                            .font(.subheadline)
+                            .foregroundStyle(KleanTheme.mutedInk)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Divider()
+                        .opacity(0.36)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HealthSignalRow(
+                            title: "Scan Coverage",
+                            value: coverageText,
+                            tint: coverageTint
+                        )
+                        HealthSignalRow(
+                            title: "Protected Paths",
+                            value: snapshot.inaccessiblePaths.isEmpty ? "Clear" : "\(snapshot.inaccessiblePaths.count.formatted()) unreadable",
+                            tint: snapshot.inaccessiblePaths.isEmpty ? KleanTheme.success : KleanTheme.warning
+                        )
+                    }
+                }
+                .frame(width: 260, alignment: .topLeading)
+            }
+        }
+    }
+
+    private var topHogSizeText: String {
+        guard let topHog = snapshot.actionableStorageHogs.first else {
+            return "None"
+        }
+        return ByteCountFormatter.storageString(topHog.bytes)
+    }
+
+    private var topHogNameText: String {
+        snapshot.actionableStorageHogs.first?.name ?? "No large item found"
+    }
+
+    private var coverageText: String {
+        let used = max(snapshot.volume.usedBytes, 1)
+        let percentage = min(Int(((Double(snapshot.scannedBytes) / Double(used)) * 100).rounded()), 100)
+        return "\(percentage)% mapped"
+    }
+
+    private var coverageTint: Color {
+        let used = max(snapshot.volume.usedBytes, 1)
+        let fraction = Double(snapshot.scannedBytes) / Double(used)
+        if fraction >= 0.65 {
+            return KleanTheme.success
+        }
+        if fraction >= 0.35 {
+            return KleanTheme.warning
+        }
+        return KleanTheme.danger
+    }
+}
+
+private struct CommandMetricCard: View {
+    let title: String
+    let value: String
+    let note: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased())
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(KleanTheme.quietInk)
+            Text(value)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(KleanTheme.ink)
+                .lineLimit(1)
+            Text(note)
+                .font(.caption)
+                .foregroundStyle(KleanTheme.mutedInk)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Capsule(style: .continuous)
+                .fill(tint.opacity(0.72))
+                .frame(height: 5)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 124, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.50))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.55), lineWidth: 1)
+        }
+    }
+}
+
+private struct HealthSignalRow: View {
+    let title: String
+    let value: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(tint)
+                .frame(width: 8, height: 8)
+            Text(title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(KleanTheme.mutedInk)
+            Spacer()
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(KleanTheme.ink)
+                .lineLimit(1)
+        }
     }
 }
 
@@ -528,7 +728,7 @@ private struct StorageSummaryCard: View {
 
     private var coveragePercent: Int {
         let used = max(snapshot.volume.usedBytes, 1)
-        return Int(((Double(snapshot.scannedBytes) / Double(used)) * 100).rounded())
+        return min(Int(((Double(snapshot.scannedBytes) / Double(used)) * 100).rounded()), 100)
     }
 }
 
@@ -558,6 +758,7 @@ private struct QuickActionsCard: View {
                                 recommendation: recommendation,
                                 execute: { viewModel.requestCleanup(recommendation) }
                             )
+                            .disabled(viewModel.isPerformingCleanup)
                         }
                     }
                 }
@@ -585,8 +786,10 @@ private struct ReviewCleanupsCard: View {
                     ForEach(recommendations.prefix(8)) { recommendation in
                         ReviewCleanupRow(
                             recommendation: recommendation,
+                            reveal: { viewModel.reveal(recommendation.targetURL) },
                             execute: { viewModel.requestCleanup(recommendation) }
                         )
+                        .disabled(viewModel.isPerformingCleanup)
                     }
                 }
                 .animation(.snappy(duration: 0.22), value: recommendations.map(\.id))
@@ -612,8 +815,10 @@ private struct DeveloperRoutinesCard: View {
                     ForEach(recommendations.prefix(6)) { recommendation in
                         DeveloperRoutineRow(
                             recommendation: recommendation,
+                            reveal: { viewModel.reveal(recommendation.targetURL) },
                             execute: { viewModel.requestCleanup(recommendation) }
                         )
+                        .disabled(viewModel.isPerformingCleanup)
                     }
                 }
             }
@@ -720,7 +925,8 @@ private struct FileListCard: View {
                             FileRowCard(
                                 item: item,
                                 reveal: { viewModel.reveal(item.url) },
-                                trash: { viewModel.requestTrash(item) }
+                                trash: { viewModel.requestTrash(item) },
+                                isTrashDisabled: viewModel.isPerformingCleanup
                             )
                         }
                     }
@@ -734,6 +940,7 @@ private struct FileRowCard: View {
     let item: StorageNode
     let reveal: () -> Void
     let trash: () -> Void
+    let isTrashDisabled: Bool
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
@@ -781,6 +988,7 @@ private struct FileRowCard: View {
                         Label("Trash", systemImage: "trash.fill")
                     }
                         .buttonStyle(KleanPrimaryActionStyle())
+                        .disabled(isTrashDisabled)
                 }
             }
             .frame(minWidth: 152, alignment: .trailing)
@@ -1128,6 +1336,7 @@ private struct QuickActionRow: View {
 
 private struct DeveloperRoutineRow: View {
     let recommendation: CleanupRecommendation
+    let reveal: () -> Void
     let execute: () -> Void
 
     var body: some View {
@@ -1172,6 +1381,11 @@ private struct DeveloperRoutineRow: View {
 
                     Spacer()
 
+                    Button(action: reveal) {
+                        Label("Reveal", systemImage: "magnifyingglass")
+                    }
+                    .buttonStyle(KleanSecondaryActionStyle())
+
                     Button(action: execute) {
                         Label(recommendation.buttonLabel, systemImage: "sparkles")
                     }
@@ -1195,6 +1409,7 @@ private struct DeveloperRoutineRow: View {
 
 private struct ReviewCleanupRow: View {
     let recommendation: CleanupRecommendation
+    let reveal: () -> Void
     let execute: () -> Void
 
     var body: some View {
@@ -1239,6 +1454,11 @@ private struct ReviewCleanupRow: View {
                     }
 
                     Spacer()
+
+                    Button(action: reveal) {
+                        Label("Reveal", systemImage: "magnifyingglass")
+                    }
+                    .buttonStyle(KleanGhostActionStyle())
 
                     Button(action: execute) {
                         Label(recommendation.buttonLabel, systemImage: "trash.fill")
@@ -1480,14 +1700,6 @@ private extension CleanupRisk {
             return KleanTheme.warning
         case .high:
             return KleanTheme.danger
-        }
-    }
-}
-
-private extension StorageSnapshot {
-    var reclaimableBytes: Int64 {
-        allCleanupRecommendations.reduce(into: 0) { partialResult, recommendation in
-            partialResult += recommendation.estimatedBytes
         }
     }
 }
